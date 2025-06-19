@@ -1,0 +1,49 @@
+[gd_scene load_steps=9 format=3 uid="uid://dlngg0ky7ua4m"]
+
+[ext_resource type="Script" uid="uid://cjytwqfrg47i8" path="res://scenes/objects/physics cube/cube.gd" id="1_0xg1a"]
+[ext_resource type="Script" uid="uid://b1is8v3oc4uvn" path="res://scenes/objects/physics cube/rigid_body_networker.gd" id="1_8rre3"]
+[ext_resource type="Script" uid="uid://yvtuwenf37q7" path="res://scenes/objects/outliner.gd" id="2_n5rde"]
+[ext_resource type="Script" uid="uid://b2oorji1j7ndm" path="res://scenes/objects/interactable.gd" id="3_md6ce"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_j5qle"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_sqwuu"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_61xlv"]
+material = SubResource("StandardMaterial3D_sqwuu")
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_fnn7i"]
+radius = 0.9
+
+[node name="Cube" type="RigidBody3D" node_paths=PackedStringArray("networker", "mesh", "interactor")]
+collision_layer = 3
+collision_mask = 19
+script = ExtResource("1_0xg1a")
+networker = NodePath("RigidBodyNetworker")
+mesh = NodePath("MeshInstance3D")
+interactor = NodePath("Interactable")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_j5qle")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_61xlv")
+
+[node name="Highlighter" type="MeshInstance3D" parent="MeshInstance3D"]
+visible = false
+script = ExtResource("2_n5rde")
+metadata/_custom_type_script = "uid://yvtuwenf37q7"
+
+[node name="RigidBodyNetworker" type="NetworkedNode" parent="." node_paths=PackedStringArray("target")]
+object_type = 1
+script = ExtResource("1_8rre3")
+target = NodePath("..")
+
+[node name="Interactable" type="Area3D" parent="."]
+collision_layer = 4
+collision_mask = 4
+monitoring = false
+script = ExtResource("3_md6ce")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Interactable"]
+shape = SubResource("SphereShape3D_fnn7i")

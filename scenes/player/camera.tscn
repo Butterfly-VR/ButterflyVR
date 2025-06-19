@@ -1,0 +1,34 @@
+[gd_scene load_steps=6 format=3 uid="uid://de6hhgtdqpb24"]
+
+[ext_resource type="Script" uid="uid://claubbn2g23t" path="res://scenes/player/camera_3d.gd" id="1_0g3l7"]
+[ext_resource type="PackedScene" uid="uid://dv5d7diocohlq" path="res://scenes/player/ui/ui_root.tscn" id="2_vrjh1"]
+[ext_resource type="Script" uid="uid://d26kogrs0h2jr" path="res://scenes/player/grabber.gd" id="3_6dfqq"]
+[ext_resource type="Script" uid="uid://c053ffyni0v5k" path="res://scenes/player/interacter.gd" id="4_aqv72"]
+[ext_resource type="Script" uid="uid://cocy8xj0gmdx8" path="res://scenes/player/highlighter.gd" id="5_6c0ns"]
+
+[node name="Camera3D" type="Camera3D"]
+script = ExtResource("1_0g3l7")
+
+[node name="UIRoot" parent="." instance=ExtResource("2_vrjh1")]
+
+[node name="Grabber" type="RayCast3D" parent="."]
+enabled = false
+target_position = Vector3(0, 0, -100)
+collision_mask = 2
+script = ExtResource("3_6dfqq")
+
+[node name="GrabTarget" type="Node3D" parent="Grabber"]
+
+[node name="Interactor" type="RayCast3D" parent="."]
+enabled = false
+target_position = Vector3(0, 0, -100)
+collision_mask = 4
+collide_with_areas = true
+script = ExtResource("4_aqv72")
+
+[node name="Highlighter" type="RayCast3D" parent="."]
+target_position = Vector3(0, 0, -100)
+collision_mask = 6
+hit_from_inside = true
+hit_back_faces = false
+script = ExtResource("5_6c0ns")

@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://bixf7hffk1aka"]
+
+[ext_resource type="Script" uid="uid://djbkq64erxsks" path="res://scenes/startup/loading_server.gd" id="1_d0djq"]
+
+[node name="LoadingServer" type="Node"]
+script = ExtResource("1_d0djq")

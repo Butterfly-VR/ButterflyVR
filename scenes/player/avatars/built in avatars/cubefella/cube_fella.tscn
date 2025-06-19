@@ -1,0 +1,18 @@
+[gd_scene load_steps=2 format=3 uid="uid://le13if4v6qpc"]
+
+[ext_resource type="PackedScene" uid="uid://doj7dd4nu4kqf" path="res://scenes/player/avatars/built in avatars/cubefella/Untitled.glb" id="1_71gth"]
+
+[node name="CubeFella" type="Node3D"]
+
+[node name="Untitled" parent="." instance=ExtResource("1_71gth")]
+
+[node name="Skeleton3D" parent="Untitled/Armature_001" index="0"]
+metadata/IKMarker = {
+"head_bone": 4,
+"left_arm_bone": 12,
+"left_leg_bone": 18,
+"right_arm_bone": 8,
+"right_leg_bone": 15
+}
+
+[editable path="Untitled"]

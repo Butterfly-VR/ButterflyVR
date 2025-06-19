@@ -1,0 +1,71 @@
+[gd_scene load_steps=13 format=3 uid="uid://dp5npmsern82o"]
+
+[ext_resource type="Script" uid="uid://cunre5bjrn1g" path="res://scenes/world/world.gd" id="1_2wqxu"]
+[ext_resource type="Script" uid="uid://d0pd8vk2782dh" path="res://scenes/world/network_node_builder.gd" id="2_78dre"]
+[ext_resource type="Script" uid="uid://cim71h85ol3vl" path="res://scenes/world/player_disconnect_handler.gd" id="3_ecjtj"]
+[ext_resource type="PackedScene" uid="uid://dtlnxdmmrq5lc" path="res://scenes/objects/object_placeholder.tscn" id="3_ggr7k"]
+[ext_resource type="PackedScene" uid="uid://dlngg0ky7ua4m" path="res://scenes/objects/physics cube/cube.tscn" id="4_iwaqr"]
+[ext_resource type="Script" uid="uid://8iyqbbtl2uko" path="res://scenes/world/chat_box_manager.gd" id="4_vq23v"]
+
+[sub_resource type="Gradient" id="Gradient_yj1bh"]
+offsets = PackedFloat32Array(0, 0.00793651, 0.015873, 0.0238095, 0.031746, 1)
+colors = PackedColorArray(0, 0, 0, 1, 0.214286, 0.214286, 0.214286, 1, 0.333714, 0.333714, 0.333714, 1, 0.446553, 0.446553, 0.446553, 1, 0.604038, 0.604038, 0.604038, 1, 1, 1, 1, 1)
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_cughl"]
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_6qdlq"]
+color_ramp = SubResource("Gradient_yj1bh")
+noise = SubResource("FastNoiseLite_cughl")
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_nsnl1"]
+albedo_texture = SubResource("NoiseTexture2D_6qdlq")
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_64wdw"]
+material = SubResource("StandardMaterial3D_nsnl1")
+size = Vector2(20, 20)
+
+[sub_resource type="WorldBoundaryShape3D" id="WorldBoundaryShape3D_agtxg"]
+
+[node name="DebugWorld" type="Node" node_paths=PackedStringArray("spawn_point")]
+script = ExtResource("1_2wqxu")
+spawn_point = NodePath("MeshInstance3D/Spawn")
+
+[node name="WorldComponents" type="Node" parent="."]
+
+[node name="NetworkNodeBuilder" type="Node" parent="WorldComponents"]
+script = ExtResource("2_78dre")
+prefabs = {
+0: "res://scenes/player/player.tscn",
+1: "res://scenes/objects/physics cube/cube.tscn"
+}
+path_offsets = {
+0: 2,
+1: 2
+}
+
+[node name="PlayerDisconnectHandler" type="Node" parent="WorldComponents"]
+script = ExtResource("3_ecjtj")
+
+[node name="ChatBoxManager" type="Node" parent="WorldComponents"]
+script = ExtResource("4_vq23v")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+mesh = SubResource("PlaneMesh_64wdw")
+
+[node name="StaticBody3D" type="StaticBody3D" parent="MeshInstance3D"]
+collision_layer = 17
+collision_mask = 17
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="MeshInstance3D/StaticBody3D"]
+shape = SubResource("WorldBoundaryShape3D_agtxg")
+
+[node name="Spawn" type="Node3D" parent="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.27372, 0)
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.88165, -0.211182, 0.422014, -0.117749, 0.767547, 0.630085, -0.456978, -0.605206, 0.651841, 0, 2.35174, 0)
+shadow_enabled = true
+
+[node name="ObjectPlaceholder" parent="." instance=ExtResource("3_ggr7k")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.989319, -4.96407)
+object = ExtResource("4_iwaqr")

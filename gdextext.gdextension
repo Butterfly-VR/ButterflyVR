@@ -1,0 +1,10 @@
+[configuration]
+entry_symbol = "gdext_rust_init"
+compatibility_minimum = 4.1
+reloadable = true
+
+[libraries]
+linux.debug.x86_64 =     "res://rust/butteryfly-rs-module/target/debug/libbutteryfly_rs_module.so"
+linux.release.x86_64 =   "res://rust/butteryfly-rs-module/target/release/libbutteryfly_rs_module.so"
+windows.debug.x86_64 =   "res://rust/butteryfly-rs-module/target/debug/butteryfly_rs_module.dll"
+windows.release.x86_64 = "res://rust/butteryfly-rs-module/target/release/butteryfly_rs_module.dll"

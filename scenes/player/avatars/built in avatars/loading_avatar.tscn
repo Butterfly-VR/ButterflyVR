@@ -1,0 +1,8 @@
+[gd_scene format=3 uid="uid://db1x672qttnqv"]
+
+[node name="LoadingAvatar" type="Node3D"]
+
+[node name="Label3D" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+billboard = 1
+text = "LOADING"

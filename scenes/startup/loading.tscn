@@ -1,0 +1,59 @@
+[gd_scene load_steps=5 format=3 uid="uid://dq0jh8bb6ohna"]
+
+[ext_resource type="Script" uid="uid://d3sv3rpa5pvwh" path="res://scenes/startup/loading.gd" id="1_1u0nn"]
+[ext_resource type="Script" uid="uid://ensf8ox2gjlu" path="res://scenes/startup/token_input.gd" id="2_6xglg"]
+[ext_resource type="Script" uid="uid://ctun25b402gv6" path="res://scenes/startup/button.gd" id="3_nqoj2"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_ccmk4"]
+font_size = 54
+
+[node name="Loading" type="Node" node_paths=PackedStringArray("token_box")]
+script = ExtResource("1_1u0nn")
+token_box = NodePath("Control/Panel/VBoxContainer/TextEdit")
+
+[node name="Control" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="Panel" parent="Control"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.0817708
+anchor_top = 0.123148
+anchor_right = 0.918229
+anchor_bottom = 0.876852
+grow_horizontal = 2
+grow_vertical = 2
+metadata/_edit_use_anchors_ = true
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Control/Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Label" type="Label" parent="Control/Panel/VBoxContainer"]
+layout_mode = 2
+text = "enter connect token to join a server (see readme for details):"
+label_settings = SubResource("LabelSettings_ccmk4")
+metadata/_edit_use_anchors_ = true
+
+[node name="TextEdit" type="TextEdit" parent="Control/Panel/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+placeholder_text = "token..."
+wrap_mode = 1
+script = ExtResource("2_6xglg")
+
+[node name="Button" type="Button" parent="Control/Panel/VBoxContainer" node_paths=PackedStringArray("token_box")]
+layout_mode = 2
+theme_override_font_sizes/font_size = 64
+text = "SUBMIT"
+script = ExtResource("3_nqoj2")
+token_box = NodePath("../TextEdit")

@@ -1,0 +1,22 @@
+[gd_scene load_steps=4 format=3 uid="uid://cn3kl8e8lpqcu"]
+
+[ext_resource type="Script" uid="uid://duqq822ghxpeq" path="res://scenes/player/player.gd" id="1_gyb1k"]
+[ext_resource type="Script" uid="uid://bfufsu312gtpv" path="res://scenes/player/player_networker.gd" id="3_hf0ep"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_mfl08"]
+
+[node name="player" type="CharacterBody3D" node_paths=PackedStringArray("networker") groups=["Players"]]
+collision_layer = 16
+axis_lock_angular_x = true
+axis_lock_angular_z = true
+floor_constant_speed = true
+platform_on_leave = 1
+script = ExtResource("1_gyb1k")
+networker = NodePath("PlayerNetworker")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("CapsuleShape3D_mfl08")
+
+[node name="PlayerNetworker" type="NetworkedNode" parent="." node_paths=PackedStringArray("target")]
+script = ExtResource("3_hf0ep")
+target = NodePath("..")

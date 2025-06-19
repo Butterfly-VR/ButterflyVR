@@ -1,0 +1,297 @@
+[gd_scene load_steps=16 format=3 uid="uid://dv5d7diocohlq"]
+
+[ext_resource type="Script" uid="uid://benj7caxeip7f" path="res://scenes/player/ui/main_menu.gd" id="1_dfgow"]
+[ext_resource type="Script" uid="uid://c2h7be73u7n5c" path="res://scenes/player/ui/menu_selector.gd" id="2_r1u74"]
+[ext_resource type="Script" uid="uid://drofe2xcwpp3x" path="res://scenes/player/ui/chat.gd" id="3_k8goo"]
+[ext_resource type="Script" uid="uid://d3yfk875eci44" path="res://scenes/player/ui/disconnect.gd" id="3_vnics"]
+[ext_resource type="Script" uid="uid://ds7hokjkv02bh" path="res://scenes/player/ui/send_message.gd" id="4_dxony"]
+[ext_resource type="Script" uid="uid://ksrjgkewkwkw" path="res://scenes/player/ui/previewer.gd" id="6_0rwa2"]
+[ext_resource type="Script" uid="uid://gpmku2l1rcax" path="res://scenes/player/ui/avatar_list.gd" id="6_cinv8"]
+[ext_resource type="Script" uid="uid://cqan08xhfdo5p" path="res://scenes/player/ui/reload_avatars.gd" id="8_qwn86"]
+
+[sub_resource type="GDScript" id="GDScript_kir8s"]
+resource_name = "mini_exit"
+script/source = "extends Button
+
+func _pressed() -> void:
+	(NetworkManager as NetNodeManager).stop() # disconnect first so the server isnt waiting for timeout
+	get_tree().free() # works? idk i mean it just needs to close the game
+"
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_0rwa2"]
+
+[sub_resource type="Sky" id="Sky_0rwa2"]
+sky_material = SubResource("ProceduralSkyMaterial_0rwa2")
+radiance_size = 1
+
+[sub_resource type="Environment" id="Environment_0rwa2"]
+background_mode = 2
+background_energy_multiplier = 3.0
+sky = SubResource("Sky_0rwa2")
+
+[sub_resource type="World3D" id="World3D_r7ky6"]
+environment = SubResource("Environment_0rwa2")
+
+[sub_resource type="WorldBoundaryShape3D" id="WorldBoundaryShape3D_0rwa2"]
+
+[sub_resource type="ViewportTexture" id="ViewportTexture_r7ky6"]
+viewport_path = NodePath("MainMenu/VBoxContainer/Panel/Avatar/Preview/SubViewport")
+
+[node name="UIRoot" type="CanvasLayer"]
+
+[node name="MainMenu" type="Panel" parent="."]
+anchors_preset = -1
+anchor_left = 0.105729
+anchor_top = 0.160185
+anchor_right = 0.894792
+anchor_bottom = 0.839815
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_dfgow")
+metadata/_edit_use_anchors_ = true
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MainMenu"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="TabContainer" parent="MainMenu/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+current_tab = 3
+tabs_visible = false
+script = ExtResource("2_r1u74")
+
+[node name="Home" type="Control" parent="MainMenu/VBoxContainer/Panel"]
+visible = false
+layout_mode = 2
+metadata/_tab_index = 0
+
+[node name="Label" type="Label" parent="MainMenu/VBoxContainer/Panel/Home"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "woah much home very menu"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Exit" type="Control" parent="MainMenu/VBoxContainer/Panel"]
+visible = false
+layout_mode = 2
+metadata/_tab_index = 1
+
+[node name="Button" type="Button" parent="MainMenu/VBoxContainer/Panel/Exit"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 338.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "exit"
+script = SubResource("GDScript_kir8s")
+
+[node name="Button2" type="Button" parent="MainMenu/VBoxContainer/Panel/Exit"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 0.000320435
+offset_top = 0.000213623
+offset_right = 0.000366211
+offset_bottom = -338.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "disconnect"
+script = ExtResource("3_vnics")
+
+[node name="Chat" type="Control" parent="MainMenu/VBoxContainer/Panel"]
+visible = false
+layout_mode = 2
+metadata/_tab_index = 2
+
+[node name="ScrollContainer" type="ScrollContainer" parent="MainMenu/VBoxContainer/Panel/Chat"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 0.902511
+grow_horizontal = 2
+grow_vertical = 2
+metadata/_edit_use_anchors_ = true
+
+[node name="Chat" type="Label" parent="MainMenu/VBoxContainer/Panel/Chat/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+autowrap_mode = 3
+script = ExtResource("3_k8goo")
+metadata/_edit_use_anchors_ = true
+
+[node name="Control" type="Control" parent="MainMenu/VBoxContainer/Panel/Chat"]
+layout_mode = 1
+anchor_top = 0.903988
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("4_dxony")
+metadata/_edit_use_anchors_ = true
+
+[node name="LineEdit" type="LineEdit" parent="MainMenu/VBoxContainer/Panel/Chat/Control"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 0.879868
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+placeholder_text = "send message..."
+max_length = 500
+keep_editing_on_text_submit = true
+clear_button_enabled = true
+metadata/_edit_use_anchors_ = true
+
+[node name="Button" type="Button" parent="MainMenu/VBoxContainer/Panel/Chat/Control"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.879868
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 0
+grow_vertical = 2
+theme_override_font_sizes/font_size = 40
+text = "send"
+metadata/_edit_use_anchors_ = true
+
+[node name="Avatar" type="Control" parent="MainMenu/VBoxContainer/Panel"]
+layout_mode = 2
+metadata/_tab_index = 3
+
+[node name="Preview" type="Panel" parent="MainMenu/VBoxContainer/Panel/Avatar"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 0.247525
+anchor_bottom = 0.763663
+metadata/_edit_use_anchors_ = true
+
+[node name="SubViewport" type="SubViewport" parent="MainMenu/VBoxContainer/Panel/Avatar/Preview"]
+world_3d = SubResource("World3D_r7ky6")
+transparent_bg = true
+size = Vector2i(512, 1024)
+render_target_update_mode = 3
+
+[node name="Previewer" type="Node3D" parent="MainMenu/VBoxContainer/Panel/Avatar/Preview/SubViewport" node_paths=PackedStringArray("list")]
+script = ExtResource("6_0rwa2")
+list = NodePath("../../../AvatarList")
+
+[node name="Camera3D" type="Camera3D" parent="MainMenu/VBoxContainer/Panel/Avatar/Preview/SubViewport"]
+transform = Transform3D(1, 0, 1.74846e-07, 0, 1, 0, -1.74846e-07, 0, 1, 0, 0.7, 1)
+
+[node name="StaticBody3D" type="StaticBody3D" parent="MainMenu/VBoxContainer/Panel/Avatar/Preview/SubViewport"]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="MainMenu/VBoxContainer/Panel/Avatar/Preview/SubViewport/StaticBody3D"]
+shape = SubResource("WorldBoundaryShape3D_0rwa2")
+
+[node name="TextureRect" type="TextureRect" parent="MainMenu/VBoxContainer/Panel/Avatar/Preview"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = SubResource("ViewportTexture_r7ky6")
+expand_mode = 1
+
+[node name="Button" type="Button" parent="MainMenu/VBoxContainer/Panel/Avatar"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.000660066
+anchor_top = 0.763663
+anchor_right = 0.247525
+anchor_bottom = 1.0
+theme_override_font_sizes/font_size = 44
+text = "change avatar"
+metadata/_edit_use_anchors_ = true
+
+[node name="AvatarList" type="VBoxContainer" parent="MainMenu/VBoxContainer/Panel/Avatar"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.247525
+anchor_right = 1.0
+anchor_bottom = 0.763663
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("6_cinv8")
+metadata/_edit_use_anchors_ = true
+
+[node name="Panel" type="Panel" parent="MainMenu/VBoxContainer/Panel/Avatar"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.247525
+anchor_top = 0.763663
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+metadata/_edit_use_anchors_ = true
+
+[node name="Button2" type="Button" parent="MainMenu/VBoxContainer/Panel/Avatar/Panel"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.789474
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_bottom = 3.05176e-05
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 42
+text = "reload all"
+script = ExtResource("8_qwn86")
+metadata/_edit_use_anchors_ = true
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MainMenu/VBoxContainer"]
+layout_mode = 2
+alignment = 1
+
+[node name="Button" type="Button" parent="MainMenu/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 32
+toggle_mode = true
+text = "home"
+
+[node name="Button4" type="Button" parent="MainMenu/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 32
+toggle_mode = true
+text = "avatar"
+
+[node name="Button2" type="Button" parent="MainMenu/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 32
+toggle_mode = true
+text = "instance chat"
+
+[node name="Button3" type="Button" parent="MainMenu/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 32
+toggle_mode = true
+text = "exit
+"
+
+[connection signal="text_submitted" from="MainMenu/VBoxContainer/Panel/Chat/Control/LineEdit" to="MainMenu/VBoxContainer/Panel/Chat/Control" method="send"]
+[connection signal="pressed" from="MainMenu/VBoxContainer/Panel/Chat/Control/Button" to="MainMenu/VBoxContainer/Panel/Chat/Control" method="send"]
+[connection signal="pressed" from="MainMenu/VBoxContainer/Panel/Avatar/Button" to="MainMenu/VBoxContainer/Panel/Avatar/AvatarList" method="equip_avatar"]
+[connection signal="visibility_changed" from="MainMenu/VBoxContainer/Panel/Avatar/AvatarList" to="MainMenu/VBoxContainer/Panel/Avatar/AvatarList" method="update"]
+[connection signal="pressed" from="MainMenu/VBoxContainer/HBoxContainer/Button" to="MainMenu/VBoxContainer/Panel" method="change_selected_menu" binds= [0]]
+[connection signal="pressed" from="MainMenu/VBoxContainer/HBoxContainer/Button4" to="MainMenu/VBoxContainer/Panel" method="change_selected_menu" binds= [3]]
+[connection signal="pressed" from="MainMenu/VBoxContainer/HBoxContainer/Button2" to="MainMenu/VBoxContainer/Panel" method="change_selected_menu" binds= [2]]
+[connection signal="pressed" from="MainMenu/VBoxContainer/HBoxContainer/Button3" to="MainMenu/VBoxContainer/Panel" method="change_selected_menu" binds= [1]]

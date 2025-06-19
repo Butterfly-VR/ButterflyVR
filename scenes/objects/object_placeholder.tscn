@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://dtlnxdmmrq5lc"]
+
+[ext_resource type="Script" uid="uid://c4rgakbv206xk" path="res://scenes/objects/object_placeholder.gd" id="1_arjlx"]
+
+[node name="ObjectPlaceholder" type="Node3D"]
+script = ExtResource("1_arjlx")
