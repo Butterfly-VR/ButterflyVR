@@ -17,6 +17,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Build
-      run: cargo build --verbose
+      run: cd rust/butteryfly-rs-module; cargo build --verbose
     - name: Build Release
-      run: cargo build -r --verbose
+      run: cd rust/butteryfly-rs-module; cargo build -r --verbose
