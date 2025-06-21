@@ -6,7 +6,7 @@ ButterflyVR is a new open source social VR game, built with godot and rust.
 > 
 > In other words, if your looking for a game you can play this is not for you.
 ## features
-Currently ButterflyVR is very early in development and as such has minimal features. If you want to find out about future planned features consider visiting the [roadmap.](#)
+Currently ButterflyVR is very early in development and as such has minimal features. The few it does have are displayed below.
 
 **current features:**
 * Custom rust netcode using [netcode](https://github.com/benny-n/netcode) for security
@@ -27,7 +27,7 @@ cargo build
 5. Download and open the [godot editor](https://godotengine.org/) (4.4.1)
 6. Export the project using the correct template for your platform
 ## docs
-Documentation is available within the project as godot docs, and a [wiki](#) is available for information about the project
+Documentation is available within the project as godot docs, and a [wiki](https://github.com/Butterfly-VR/ButterflyVR/wiki) is available for information about the project
 ## contact
 Consider joining the [discord](https://discord.gg/vHdewgkj3e) for the latest development information or to contact us. 
 
