@@ -2,8 +2,6 @@
 use crate::messages::*;
 use crate::net_nodes::NetworkedNode;
 use crate::serializer::*;
-use crate::voice;
-use crate::voice::FRAME_LENGTH;
 use bitvec::prelude::*;
 use build_time::build_time_utc;
 use std::cell::Cell;
@@ -30,7 +28,6 @@ pub struct NetNodeServer {
     pub id: u16,
     next_id: u16,
     pub networked_nodes: Vec<Gd<NetworkedNode>>,
-    voice_manager: voice::VoiceStreamManager,
     server_networker: ServerNetworker,
     message_buffer: VecDeque<Box<dyn Message>>,
     incoming_message_buffer: VecDeque<Box<dyn Message>>,
@@ -129,16 +126,6 @@ pub impl NetNodeServer {
         self.message_buffer.push_back(Box::new(message.clone()));
         self.incoming_message_buffer.push_back(Box::new(message));
     }
-    pub fn register_player_object(&mut self, client_id: u16, object: Gd<Node3D>) {
-        let client = self
-            .server_networker
-            .clients
-            .values_mut()
-            .find(|x| x.id == client_id);
-        if let Some(client) = client {
-            client.player_position_object = Some(object);
-        }
-    }
     fn update_network_nodes(&mut self) {
         for client in self.server_networker.clients.iter() {
             for packet_tuple in client
@@ -175,15 +162,15 @@ pub impl NetNodeServer {
 
     fn send_packets_server(&mut self) {
         const PACKET_MAX_SIZE_THRESHOLD: usize = 80;
-        const BANDWIDTH_BUDGET: usize = 64000;
+        const BANDWIDTH_BUDGET: usize = 512000;
         const MAX_SINGLE_PACKET_PAYLOAD_LENGTH: usize = 4800;
         let bandwidth_per_tick =
             BANDWIDTH_BUDGET / Engine::singleton().get_physics_ticks_per_second() as usize;
         let networker = &mut self.server_networker;
         let mut buffer: Vec<(ClientIndex, BitVec<u64>, u16)> = Vec::new();
         for client in networker.clients.iter_mut() {
-            client.1.remaining_bandwidth += bandwidth_per_tick;
-            'outer: while client.1.remaining_bandwidth > PACKET_MAX_SIZE_THRESHOLD {
+            let mut remaining_bandwidth = bandwidth_per_tick;
+            'outer: while remaining_bandwidth > PACKET_MAX_SIZE_THRESHOLD {
                 if !client.1.id_received {
                     buffer.push((
                         *client.0,
@@ -202,8 +189,7 @@ pub impl NetNodeServer {
                 }
                 client.1.waiting_acks.clear();
                 if !packet.is_empty() {
-                    client.1.remaining_bandwidth =
-                        client.1.remaining_bandwidth.saturating_sub(packet.len());
+                    remaining_bandwidth = remaining_bandwidth.saturating_sub(packet.len());
                     buffer.push((*client.0, packet, CHANNEL_ACK));
                 }
                 // channel 3 (messages)
@@ -214,10 +200,10 @@ pub impl NetNodeServer {
                         &self.message_buffer[client.1.message_buffer_position];
                     packet.extend(message.get_message_type().view_bits::<Lsb0>());
                     packet.extend(message.encode_message());
-                    if (client.1.remaining_bandwidth as i64 - packet.len() as i64) < 0 {
+                    if (remaining_bandwidth as i64 - packet.len() as i64) < 0 {
                         break 'outer;
                     }
-                    client.1.remaining_bandwidth -= packet.len();
+                    remaining_bandwidth -= packet.len();
                     buffer.push((*client.0, packet, 3));
                     client.1.message_buffer_position += 1;
                 }
@@ -233,10 +219,7 @@ pub impl NetNodeServer {
                             self.networked_nodes[index as usize].bind();
                         let tmp = node.get_byte_data(&node.get_networked_values_types());
                         if tmp.len() + packet.len()
-                            > cmp::min(
-                                client.1.remaining_bandwidth,
-                                MAX_SINGLE_PACKET_PAYLOAD_LENGTH,
-                            )
+                            > cmp::min(remaining_bandwidth, MAX_SINGLE_PACKET_PAYLOAD_LENGTH)
                         {
                             break;
                         }
@@ -245,7 +228,7 @@ pub impl NetNodeServer {
                     }
 
                     if packet.len() > CHANNEL1_HEADER_SIZE {
-                        client.1.remaining_bandwidth -= packet.len();
+                        remaining_bandwidth -= packet.len();
                         buffer.push((*client.0, packet, 2));
                         continue;
                     }
@@ -275,10 +258,7 @@ pub impl NetNodeServer {
                     if (value.1 != 0) && (node.owner_id != client.1.id) {
                         let tmp = node.get_byte_data(&node.get_networked_values_types());
                         if tmp.len() + packet.len()
-                            > cmp::min(
-                                client.1.remaining_bandwidth,
-                                MAX_SINGLE_PACKET_PAYLOAD_LENGTH,
-                            )
+                            > cmp::min(remaining_bandwidth, MAX_SINGLE_PACKET_PAYLOAD_LENGTH)
                         {
                             break;
                         }
@@ -287,7 +267,7 @@ pub impl NetNodeServer {
                     }
                 }
                 if packet.len() > CHANNEL1_HEADER_SIZE {
-                    client.1.remaining_bandwidth -= packet.len();
+                    remaining_bandwidth -= packet.len();
                     buffer.push((*client.0, packet, 1));
                     continue;
                 }
@@ -489,14 +469,6 @@ pub impl NetNodeServer {
                         client.c3_buffered_packets.push(packet_tuple.0);
                     }
                 }
-                5 => {
-                    let buffer: Vec<u8> = packet.chunks(BYTE).map(|x| x.load_le::<u8>()).collect();
-                    if client.next_c5_packet_number <= packet_number {
-                        client
-                            .voice_packet_buffer
-                            .push((packet_number, buffer[10..].into_iter().copied().collect()));
-                    }
-                }
                 _ => {
                     godot_warn!("unhandled channel: {:#?}", channelid);
                 }
@@ -566,154 +538,6 @@ pub impl NetNodeServer {
                 / (latency_info.c1_hit_rate_average + latency_info.c1_miss_rate_average);
         }
     }
-    fn process_voice_input(&mut self) {
-        const DISTANCE_FALLOFF_START: f32 = 10.0;
-        const DISTANCE_FALLOFF_END: f32 = 15.0;
-        for client in self.server_networker.clients.values_mut() {
-            if client.voice_input_stream.is_none() {
-                client.voice_input_stream = Some(self.voice_manager.create_decoder());
-            }
-
-            if client.voice_packet_buffer.len() < 3 {
-                // if buffer is small then we are consuming packets too fast for the client to keep up and need to slow down
-                return;
-            }
-            let buffer: Vec<u8>;
-            if let Some(packet_idx) = client
-                .voice_packet_buffer
-                .iter()
-                .position(|x| x.0 == client.next_c5_packet_number)
-            {
-                buffer = client.voice_packet_buffer.swap_remove(packet_idx).1;
-            } else {
-                buffer = Vec::new();
-            }
-            client.next_c5_packet_number += 1;
-            client.audio_input_buffer = self
-                .voice_manager
-                .decode_audio(client.voice_input_stream.unwrap(), &buffer);
-        }
-        // todo: would probably be a good idea to use an audio library to handle this for us
-        // then we could properly spatialize audio with hrtf, model room dampening, and handle falloff better
-        let audio_streams: Vec<(Vec<f32>, ClientIndex)> = self
-            .server_networker
-            .clients
-            .values()
-            .map(|x| (x.audio_input_buffer.clone(), x.index))
-            .collect();
-        let positions: Vec<(Vector3, ClientIndex)> = self
-            .server_networker
-            .clients
-            .values()
-            .map(|x| {
-                (
-                    {
-                        if x.player_position_object.is_some() {
-                            x.player_position_object.clone().unwrap().get_position()
-                        } else {
-                            Vector3::INF
-                        }
-                    },
-                    x.index,
-                )
-            })
-            .collect();
-        let networker = &mut self.server_networker;
-        let mut outputs: Vec<(bitvec::vec::BitVec<u64>, ClientIndex)> =
-            Vec::with_capacity(networker.clients.len());
-        // probably dont need this assert but just in case
-        assert!(audio_streams.len() == positions.len());
-        assert!(
-            audio_streams
-                .windows(2)
-                .all(|x| x[0].0.len() == x[1].0.len())
-        ); // asserts all audio streams are same length, should replace with proper handling for malformed data eventually
-        for client in networker.clients.values_mut() {
-            if client.player_position_object.is_none() {
-                continue;
-            }
-            let listener_pos: Vector3 = client
-                .player_position_object
-                .as_ref()
-                .unwrap()
-                .get_position();
-            let listener_rot: Quaternion = client
-                .player_position_object
-                .as_ref()
-                .unwrap()
-                .get_quaternion()
-                .inverse();
-            let mut final_audio: Vec<(f32, f32)> = Vec::new();
-            for audio_source in 0..audio_streams.len() {
-                if audio_streams[audio_source].1 == client.index {
-                    continue;
-                }
-                let l_r_bias: f32; // directionality, -1.0 for fully left, 1.0 for fully right
-                let mut volume: f32 = 1.0;
-                let buffer: Vec<(f32, f32)>;
-                let audio: &[f32] = &audio_streams[audio_source].0;
-                let position: Vector3 = positions[audio_source].0;
-
-                if position == Vector3::INF {
-                    continue;
-                }
-
-                let relative_position: Vector3 = listener_rot * (position - listener_pos);
-
-                let distance = relative_position.length();
-                if distance > DISTANCE_FALLOFF_END {
-                    continue;
-                }
-                if distance > DISTANCE_FALLOFF_START {
-                    volume = 1.0
-                        - ((distance - DISTANCE_FALLOFF_START)
-                            / (DISTANCE_FALLOFF_END - DISTANCE_FALLOFF_START));
-                }
-
-                // pretty bad spatial audio, should probably do this better or replace it with a library
-                l_r_bias = relative_position.normalized_or_zero().x;
-                let right_bias = (l_r_bias / 2.0) + 0.5;
-                let left_bias = ((-l_r_bias) / 2.0) + 0.5;
-                buffer = audio
-                    .iter()
-                    .map(|x| (x * volume * left_bias, x * volume * right_bias))
-                    .collect();
-
-                if final_audio.is_empty() {
-                    final_audio = buffer;
-                } else {
-                    assert!(final_audio.len() == buffer.len()); // might also be unneeded
-                    for idx in 0..final_audio.len() {
-                        let final_sample = final_audio[idx];
-                        let buffer_sample = buffer[idx];
-                        final_audio[idx] = (
-                            (final_sample.0 + buffer_sample.0).clamp(-1.0, 1.0),
-                            (final_sample.1 + buffer_sample.1).clamp(-1.0, 1.0),
-                        )
-                    }
-                }
-            }
-            if final_audio.is_empty() {
-                final_audio = vec![(0.0, 0.0); audio_streams[0].0.len()];
-            }
-            if client.audio_output_stream.is_none() {
-                client.audio_output_stream = Some(self.voice_manager.create_stereo_encoder())
-            }
-            let tmp: Vec<f32> = final_audio.into_iter().flat_map(|x| [x.0, x.1]).collect();
-            let output_buffer = self
-                .voice_manager
-                .encode_audio(client.audio_output_stream.unwrap(), &tmp);
-            let mut buffer_bits: BitVec<u64, Lsb0> =
-                BitVec::with_capacity(output_buffer.len() * BYTE);
-            for byte in output_buffer {
-                buffer_bits.extend(byte.view_bits::<Lsb0>());
-            }
-            outputs.push((buffer_bits, client.index));
-        }
-        for (buffer_bits, client) in outputs {
-            networker.send(buffer_bits.as_bitslice(), 5, client);
-        }
-    }
 }
 #[godot_api]
 impl INode for NetNodeServer {
@@ -735,7 +559,6 @@ impl INode for NetNodeServer {
         }
         self.tick_server();
         self.update_network_nodes();
-        self.process_voice_input();
         self.send_packets_server();
 
         // handle ownership events
@@ -820,11 +643,6 @@ impl ServerNetworker {
                 packet_number = Some(client.packet_number_c4);
                 client.packet_number_c4 += 1;
             }
-            5 => {
-                reliable = false;
-                packet_number = Some(client.packet_number_c5);
-                client.packet_number_c5 += 1;
-            }
             CHANNEL_CLIENT_ID => {
                 reliable = true;
                 packet_number = Some(0);
@@ -890,17 +708,10 @@ impl ServerNetworker {
                     Client {
                         index: packet.1,
                         finished_sync: false,
-                        remaining_bandwidth: 0,
                         packet_number_c1: 0,
                         packet_number_c2: 0,
                         packet_number_c3: 0,
                         packet_number_c4: 0,
-                        packet_number_c5: 0,
-                        player_position_object: None,
-                        voice_input_stream: None,
-                        audio_output_stream: None,
-                        voice_packet_buffer: Vec::new(),
-                        audio_input_buffer: vec![0.0; FRAME_LENGTH],
                         c4_remaining_packet_chunks: 0,
                         c4_packet_chunks: Vec::new(),
                         c4_waiting_packets: Vec::new(),
@@ -917,7 +728,6 @@ impl ServerNetworker {
                         c1_latency_info: LatencyInfo::default(),
                         next_c3_packet_number: 0,
                         next_c4_packet_number: 0,
-                        next_c5_packet_number: 0,
                         c3_buffered_packets: Vec::new(),
                         packet_buffers: Vec::from_iter([
                             Cell::new(Vec::new()),
@@ -1121,17 +931,10 @@ impl ServerNetworker {
 struct Client {
     index: ClientIndex,
     finished_sync: bool,
-    remaining_bandwidth: usize,
     packet_number_c1: u64,
     packet_number_c2: u64,
     packet_number_c3: u64,
     packet_number_c4: u64,
-    packet_number_c5: u64,
-    player_position_object: Option<Gd<Node3D>>,
-    voice_input_stream: Option<usize>,
-    audio_output_stream: Option<usize>,
-    voice_packet_buffer: Vec<(u64, Vec<u8>)>,
-    audio_input_buffer: Vec<f32>,
     c4_remaining_packet_chunks: u64,
     c4_packet_chunks: Vec<Vec<u8>>,
     c4_waiting_packets: Vec<Vec<u8>>,
@@ -1148,7 +951,6 @@ struct Client {
     c1_latency_info: LatencyInfo,
     next_c3_packet_number: u64,
     next_c4_packet_number: u64,
-    next_c5_packet_number: u64,
     c3_buffered_packets: Vec<BitVec<u64, Lsb0>>,
     packet_buffers: Vec<Cell<Vec<(BitVec<u64, Lsb0>, ClientIndex)>>>,
 }

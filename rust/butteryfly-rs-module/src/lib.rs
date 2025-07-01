@@ -4,7 +4,6 @@ mod messages;
 mod net_nodes;
 mod serializer;
 mod server;
-mod voice;
 use crate::client::*;
 use crate::net_nodes::*;
 use crate::server::*;
@@ -127,7 +126,7 @@ impl NetNodeManager {
             return false;
         }
         if self.client.is_some()
-            && self.client.as_ref().unwrap().bind().client_networker.state
+            && self.client.as_ref().unwrap().bind().packet_networker.state
                 == ClientState::AwaitingID
         {
             return false;
@@ -328,39 +327,6 @@ impl NetNodeManager {
             return self.server.as_ref().unwrap().bind().networked_nodes.clone();
         } else {
             panic!("tried to get_networked_nodes but no client or server is running");
-        }
-    }
-    #[func]
-    fn transmit_audio(&mut self, sample_buffer: PackedVector2Array) {
-        if self.client.is_some() {
-            self.client
-                .as_mut()
-                .unwrap()
-                .bind_mut()
-                .transmit_audio(sample_buffer);
-        } else {
-            godot_warn!("tried to transmit_audio but we are not a client")
-        }
-    }
-    #[func]
-    fn get_audio(&mut self) -> Vec<f32> {
-        if self.client.is_some() {
-            self.client.as_mut().unwrap().bind_mut().get_audio()
-        } else {
-            panic!("tried to get_audio but we are not a client")
-        }
-    }
-    #[func]
-    fn register_player_object(&mut self, player: u16, object: Gd<Node3D>) {
-        if self.server.is_some() {
-            return self
-                .server
-                .as_mut()
-                .unwrap()
-                .bind_mut()
-                .register_player_object(player, object);
-        } else {
-            panic!("tried to register_player_object but we are not a server");
         }
     }
 }
