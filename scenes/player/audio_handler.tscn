@@ -1,0 +1,19 @@
+[gd_scene load_steps=4 format=3 uid="uid://cxa5mj38qp8iu"]
+
+[ext_resource type="Script" uid="uid://w5yfotyfxjg" path="res://scenes/player/audio_handler.gd" id="1_o7ypm"]
+
+[sub_resource type="AudioStreamMicrophone" id="AudioStreamMicrophone_cv68x"]
+
+[sub_resource type="VoiceStream" id="VoiceStream_cv68x"]
+
+[node name="AudioHandler" type="Node"]
+script = ExtResource("1_o7ypm")
+
+[node name="Recorder" type="AudioStreamPlayer" parent="."]
+stream = SubResource("AudioStreamMicrophone_cv68x")
+autoplay = true
+bus = &"Record"
+
+[node name="VoicePlayer" type="AudioStreamPlayer" parent="."]
+stream = SubResource("VoiceStream_cv68x")
+autoplay = true
