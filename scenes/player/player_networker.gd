@@ -10,6 +10,8 @@ func _ready() -> void:
 		target.init_local()
 	else:
 		target.init_remote()
+	if (NetworkManager as NetNodeManager).get_id() == 0:
+		(NetworkManager as NetNodeManager).register_player_object(owner_id, target)
 
 func _get_networked_values() -> Array:
 	return [target.position, target.rotation, target.velocity, target.cam_x_rotation, target.player_state == target.Player_states.CROUCHED]

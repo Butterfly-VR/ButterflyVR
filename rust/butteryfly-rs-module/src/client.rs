@@ -2,16 +2,16 @@
 use crate::messages::*;
 use crate::net_nodes::NetworkedNode;
 use crate::serializer::*;
+use crate::voice;
 use bitvec::prelude::*;
+use godot::classes::Engine;
+use godot::prelude::*;
+use netcode::{Client, NetcodeSocket};
 use std::cell::Cell;
 use std::collections::{HashSet, VecDeque};
 use std::time::UNIX_EPOCH;
 use std::time::{Duration, Instant, SystemTime};
 use std::{cmp, collections::HashMap};
-
-use godot::classes::Engine;
-use godot::prelude::*;
-use netcode::{Client, NetcodeSocket};
 const CHANNEL_ACK: u16 = u16::MAX;
 const BYTE: usize = 8;
 const BYTES2: usize = 16;
@@ -28,7 +28,7 @@ pub struct NetNodeClient {
     next_id: u16,
     pub networked_nodes: Vec<Gd<NetworkedNode>>,
     owned_nodes: Vec<(Gd<NetworkedNode>, i64)>,
-    pub packet_networker: ClientNetworker,
+    pub client_networker: ClientNetworker,
     packet_buffers: Vec<Cell<Vec<BitVec<u64, Lsb0>>>>,
     message_buffer: VecDeque<Box<dyn Message>>,
     incoming_message_buffer: VecDeque<Box<dyn Message>>,
@@ -40,6 +40,13 @@ pub struct NetNodeClient {
     c3_next_packet_num: u64,
     c3_buffered_packets: Vec<BitVec<u64, Lsb0>>,
     c0_seen_packets: HashSet<u64>,
+    remaining_bandwidth: usize,
+    voice_manager: voice::VoiceStreamManager,
+    next_c5_packet_number: u64,
+    voice_packet_buffer: Vec<(u64, Vec<u8>)>,
+    encoder_stream: usize,
+    decoder_stream: Option<usize>,
+    pub audio_output_buffer: Vec<f32>,
     base: Base<Node>,
 }
 
@@ -71,12 +78,13 @@ pub impl NetNodeClient {
         self.networked_nodes.clear();
     }
     pub fn start_client(&mut self, arr: PackedByteArray) {
-        self.packet_networker.client = Some(Client::new(&arr.to_vec()).unwrap());
-        self.packet_networker.client.as_mut().unwrap().connect();
-        self.packet_networker
+        self.client_networker.client = Some(Client::new(&arr.to_vec()).unwrap());
+        self.client_networker.client.as_mut().unwrap().connect();
+        self.client_networker
             .send(BitVec::<u64, Lsb0>::new().as_bitslice(), CHANNEL_ACK);
         self.packet_buffers.push(Cell::new(Vec::new()));
         self.packet_buffers.push(Cell::new(Vec::new()));
+        self.encoder_stream = self.voice_manager.create_encoder();
     }
     pub fn network_grab(&mut self, target: Gd<Node>) {
         let message: PlayerPhysicsGrab = PlayerPhysicsGrab {
@@ -123,6 +131,26 @@ pub impl NetNodeClient {
         };
         self.message_buffer.push_back(Box::new(message));
     }
+    pub fn transmit_audio(&mut self, sample_buffer: PackedVector2Array) {
+        if sample_buffer.len() != voice::FRAME_LENGTH {
+            godot_warn!("got malformed sample buffer");
+            return;
+        }
+        let tmp: Vec<f32> = sample_buffer
+            .to_vec()
+            .into_iter()
+            .map(|x| (x.x + x.y) / 2.0)
+            .collect();
+        let buffer = self.voice_manager.encode_audio(self.encoder_stream, &tmp);
+        let mut buffer_bits: BitVec<u64, Lsb0> = BitVec::with_capacity(buffer.len() * BYTE);
+        for byte in buffer {
+            buffer_bits.extend(byte.view_bits::<Lsb0>());
+        }
+        self.client_networker.send(buffer_bits.as_bitslice(), 5);
+    }
+    pub fn get_audio(&self) -> Vec<f32> {
+        self.audio_output_buffer.clone()
+    }
     pub fn has_message(&self) -> bool {
         return self.incoming_message_buffer.get(0).is_some();
     }
@@ -139,7 +167,7 @@ pub impl NetNodeClient {
         return self.incoming_message_buffer[0].get_player();
     }
     pub fn disconnect(&mut self) -> Result<(), netcode::Error> {
-        self.packet_networker
+        self.client_networker
             .client
             .as_mut()
             .unwrap()
@@ -148,9 +176,9 @@ pub impl NetNodeClient {
     }
     fn tick_client(&mut self) {
         const CHANNEL_CLIENT_ID: u16 = u16::MAX - 1;
-        self.packet_networker.poll();
+        self.client_networker.poll();
         if !self
-            .packet_networker
+            .client_networker
             .client
             .as_mut()
             .unwrap()
@@ -163,7 +191,7 @@ pub impl NetNodeClient {
         let mut current_frame_hit_rate: u64 = 0;
         let mut current_frame_miss_rate: u64 = 0;
 
-        let networker = &mut self.packet_networker;
+        let networker = &mut self.client_networker;
         for packet in networker.packet_buffer.drain(..) {
             if packet.len() < BYTES2 {
                 godot_warn!("got packet with invalid size");
@@ -346,6 +374,15 @@ pub impl NetNodeClient {
                         self.c3_buffered_packets.push(packet);
                     }
                 }
+                5 => {
+                    let buffer: Vec<u8> = packet.chunks(BYTE).map(|x| x.load_le::<u8>()).collect();
+                    if self.next_c5_packet_number <= packet_number {
+                        self.voice_packet_buffer
+                            .push((packet_number, buffer[10..].into_iter().copied().collect()));
+                    } else {
+                        godot_warn!("too late");
+                    }
+                }
                 CHANNEL_CLIENT_ID => {
                     // sets the id of the client, must happen before anything else
                     self.id = packet[pointer..pointer + BYTES8].load_le::<u64>() as u16;
@@ -411,26 +448,26 @@ pub impl NetNodeClient {
         }
     }
     fn send_packets_client(&mut self) {
-        const BANDWIDTH_BUDGET: usize = 512000;
+        const BANDWIDTH_BUDGET: usize = 32000;
         const PACKET_MAX_SIZE_THRESHOLD: usize = 80;
         const MAX_SINGLE_PACKET_PAYLOAD_LENGTH: usize = 4800;
-        let mut remaining_bandwidth: usize =
+        self.remaining_bandwidth +=
             BANDWIDTH_BUDGET / Engine::singleton().get_physics_ticks_per_second() as usize;
-        while remaining_bandwidth > PACKET_MAX_SIZE_THRESHOLD {
+        while self.remaining_bandwidth > PACKET_MAX_SIZE_THRESHOLD {
             let mut packet: BitVec<u64, Lsb0> =
                 BitVec::with_capacity(MAX_SINGLE_PACKET_PAYLOAD_LENGTH);
-            for ack in &self.packet_networker.waiting_acks {
+            for ack in &self.client_networker.waiting_acks {
                 packet.extend(ack.0.view_bits::<Lsb0>());
                 packet.extend(ack.1.view_bits::<Lsb0>());
             }
-            self.packet_networker.waiting_acks.clear();
+            self.client_networker.waiting_acks.clear();
             if !packet.is_empty() {
-                self.packet_networker.send(&packet, CHANNEL_ACK);
-                remaining_bandwidth = remaining_bandwidth.saturating_sub(packet.len());
+                self.client_networker.send(&packet, CHANNEL_ACK);
+                self.remaining_bandwidth = self.remaining_bandwidth.saturating_sub(packet.len());
             }
 
             // dont send packets until we are synced, not sure if this is important or not so might remove
-            if self.packet_networker.state == ClientState::InitialSync {
+            if self.client_networker.state == ClientState::InitialSync {
                 return;
             }
             packet.clear();
@@ -438,11 +475,11 @@ pub impl NetNodeClient {
             while let Some(message) = self.message_buffer.get(0) {
                 packet.extend(message.get_message_type().view_bits::<Lsb0>());
                 packet.extend(message.encode_message());
-                if packet.len() > remaining_bandwidth {
+                if packet.len() > self.remaining_bandwidth {
                     break;
                 }
-                remaining_bandwidth -= packet.len();
-                self.packet_networker.send(&packet, 3);
+                self.remaining_bandwidth -= packet.len();
+                self.client_networker.send(&packet, 3);
                 self.message_buffer.pop_front();
             }
             // channel 1
@@ -460,7 +497,7 @@ pub impl NetNodeClient {
                 if node_ref.1 != 0 {
                     let tmp = node.get_byte_data(&types_buff);
                     if tmp.len() + packet.len()
-                        > cmp::min(remaining_bandwidth, MAX_SINGLE_PACKET_PAYLOAD_LENGTH)
+                        > cmp::min(self.remaining_bandwidth, MAX_SINGLE_PACKET_PAYLOAD_LENGTH)
                     {
                         break;
                     }
@@ -469,19 +506,42 @@ pub impl NetNodeClient {
                 }
             }
             if packet.len() > CHANNEL1_HEADER_SIZE {
-                remaining_bandwidth -= packet.len();
-                self.packet_networker.send(&packet, 1);
+                self.remaining_bandwidth -= packet.len();
+                self.client_networker.send(&packet, 1);
                 continue;
             }
             packet.clear();
             break;
         }
     }
+    fn handle_audio_input(&mut self) {
+        if self.decoder_stream.is_none() {
+            self.decoder_stream = Some(self.voice_manager.create_stereo_decoder());
+        }
+        if self.voice_packet_buffer.len() < 3 {
+            // if buffer is empty then we are consuming packets too fast for the server to keep up and need to slow down
+            return;
+        }
+        let buffer: Vec<u8>;
+        if let Some(packet_idx) = self
+            .voice_packet_buffer
+            .iter()
+            .position(|x| x.0 == self.next_c5_packet_number)
+        {
+            buffer = self.voice_packet_buffer.remove(packet_idx).1;
+        } else {
+            buffer = Vec::new();
+        }
+        self.next_c5_packet_number += 1;
+        self.audio_output_buffer = self
+            .voice_manager
+            .decode_stereo_audio(self.decoder_stream.unwrap(), &buffer);
+    }
 }
 #[godot_api]
 impl INode for NetNodeClient {
     fn physics_process(&mut self, _delta: f64) {
-        if self.packet_networker.state == ClientState::Disconnected {
+        if self.client_networker.state == ClientState::Disconnected {
             return;
         }
         // check for freed network nodes
@@ -504,6 +564,7 @@ impl INode for NetNodeClient {
         self.owned_nodes.sort_by(|a, b| a.1.cmp(&b.1));
         self.tick_client();
         self.update_network_nodes();
+        self.handle_audio_input();
         self.send_packets_client();
         // handle ownership events
         if self.has_message() && self.get_message_type() == 7 {
@@ -530,6 +591,7 @@ pub struct ClientNetworker {
     packet_number_c1: (u64, u64),
     packet_number_c3: (u64, u64),
     packet_number_c4: u64,
+    packet_number_c5: u64,
     c4_remaining_packet_chunks: u64,
     c4_packet_chunks: Vec<Vec<u8>>,
     c4_waiting_packets: Vec<Vec<u8>>,
@@ -550,6 +612,7 @@ impl Default for ClientNetworker {
             packet_number_c1: (0u64, 0u64),
             packet_number_c3: (0u64, 0u64),
             packet_number_c4: 0,
+            packet_number_c5: 0,
             c4_remaining_packet_chunks: 0,
             c4_packet_chunks: Vec::new(),
             c4_waiting_packets: Vec::new(),
@@ -595,7 +658,14 @@ impl ClientNetworker {
                 packet_number = Some(self.packet_number_c4);
                 self.packet_number_c4 += 1;
             }
+            5 => {
+                reliable = false;
+                packet_number = Some(self.packet_number_c5);
+                self.packet_number_c5 += 1;
+            }
+            u16::MAX => reliable = false,
             _ => {
+                godot_warn!("unhandled / invalid channel sent");
                 reliable = false;
             }
         }

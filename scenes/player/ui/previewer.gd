@@ -23,12 +23,12 @@ func _physics_process(_delta: float) -> void:
 			thread.wait_to_finish()
 		add_child(setup_avatar(new_avatar.instantiate()))
 
-func load_avatar_on_thread(avatar:int) -> void:
-	if !AvatarPackLoader.avatars.has(avatar):
+func load_avatar_on_thread(new_avatar_idx:int) -> void:
+	if !AvatarPackLoader.avatars.has(new_avatar_idx):
 		new_avatar = preload("res://scenes/player/avatars/built in avatars/missing_avatar.tscn")
 		avatar_preview_loaded.emit()
 		return
-	new_avatar = load(AvatarPackLoader.avatars[avatar].scene_path)
+	new_avatar = load(AvatarPackLoader.avatars[new_avatar_idx].scene_path)
 	# abort if source avatar is unsafe unless unsafe loading is enabled
 	if (!check_safe(new_avatar.get_state())):
 		if !OS.get_cmdline_args().has("--unsafe-load"):
