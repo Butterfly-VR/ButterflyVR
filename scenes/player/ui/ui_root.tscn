@@ -61,12 +61,11 @@ grow_vertical = 2
 [node name="Panel" type="TabContainer" parent="MainMenu/VBoxContainer"]
 layout_mode = 2
 size_flags_vertical = 3
-current_tab = 3
+current_tab = 0
 tabs_visible = false
 script = ExtResource("2_r1u74")
 
 [node name="Home" type="Control" parent="MainMenu/VBoxContainer/Panel"]
-visible = false
 layout_mode = 2
 metadata/_tab_index = 0
 
@@ -169,6 +168,7 @@ text = "send"
 metadata/_edit_use_anchors_ = true
 
 [node name="Avatar" type="Control" parent="MainMenu/VBoxContainer/Panel"]
+visible = false
 layout_mode = 2
 metadata/_tab_index = 3
 

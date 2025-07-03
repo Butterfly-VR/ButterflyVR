@@ -11,16 +11,9 @@ func _ready() -> void:
 	@warning_ignore("unsafe_property_access")
 	networker = get_parent().get_parent().get_parent().networker
 	owner_id = networker.owner_id
+	GlobalWorldAccess.current_world.player_grab_handler.player_grabbed.connect(on_grab)
 
 func _physics_process(_delta: float) -> void:
-	if (NetworkManager as NetNodeManager).has_message() and (NetworkManager as NetNodeManager).get_message_player() == owner_id:
-		if (NetworkManager as NetNodeManager).get_message_type() == 1:
-			@warning_ignore("unsafe_call_argument")
-			on_grab((NetworkManager as NetNodeManager).peek_message()[0])
-			(NetworkManager as NetNodeManager).pop_message()
-		elif (NetworkManager as NetNodeManager).get_message_type() == 2:
-			on_release()
-			(NetworkManager as NetNodeManager).pop_message()
 	@warning_ignore("unsafe_property_access")
 	if networker.get_parent().cam_x_rotation != null:
 		@warning_ignore("unsafe_property_access", "unsafe_method_access")
@@ -32,12 +25,18 @@ func on_release() -> void:
 	is_grabbing = false
 	if grabbed_node is RigidBody3D:
 		(grabbed_node as RigidBody3D).freeze = false
+		(grabbed_node as RigidBody3D).sleeping = false
 	grabbed_node = null
 
-func on_grab(target_path:String) -> void:
-	is_grabbing = true
-	var target:Node3D = get_node(target_path)
-	global_position = target.global_position
-	grabbed_node = target
-	if grabbed_node is RigidBody3D:
-		(grabbed_node as RigidBody3D).freeze = true
+func on_grab(player:int, target:Node) -> void:
+	if !(player == owner_id):
+		return
+	if target == null:
+		on_release()
+		return
+	if target is Node3D:
+		is_grabbing = true
+		global_position = target.global_position
+		grabbed_node = target
+		if grabbed_node is RigidBody3D:
+			(grabbed_node as RigidBody3D).freeze = true

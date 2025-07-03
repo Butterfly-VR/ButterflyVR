@@ -6,4 +6,4 @@ func send() -> void:
 	if message.is_empty():
 		return
 	(get_child(0) as LineEdit).clear()
-	(NetworkManager as NetNodeManager).network_message_send(message)
+	GlobalWorldAccess.current_world.chat_box_manager.send_message(message)

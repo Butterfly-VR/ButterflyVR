@@ -4,9 +4,11 @@ class_name NetworkedRigidBody
 var pos:Vector3
 var rot:Vector3
 var vel:Vector3
+var ang:Vector3
 var sle:bool
 var fre:bool
 var has_update:bool
+var has_update_integrate:bool
 @export var networker:RigidBodyNetworker
 @export var mesh:MeshInstance3D
 @export var interactor:Interactable
@@ -22,9 +24,10 @@ func _physics_process(_delta: float) -> void:
 		sleeping = sle
 		freeze = fre
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
-	if has_update:
-		has_update = false
+	if has_update_integrate:
+		has_update_integrate = false
 		state.linear_velocity = vel
+		state.angular_velocity = ang
 func on_grab() -> void:
 	(NetworkManager as NetNodeManager).become_object_owner(networker.objectid)
 func on_release() -> void:

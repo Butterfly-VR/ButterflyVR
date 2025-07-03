@@ -1,11 +1,13 @@
-[gd_scene load_steps=13 format=3 uid="uid://dp5npmsern82o"]
+[gd_scene load_steps=15 format=3 uid="uid://dp5npmsern82o"]
 
 [ext_resource type="Script" uid="uid://cunre5bjrn1g" path="res://scenes/world/world.gd" id="1_2wqxu"]
-[ext_resource type="Script" uid="uid://d0pd8vk2782dh" path="res://scenes/world/network_node_builder.gd" id="2_78dre"]
-[ext_resource type="Script" uid="uid://cim71h85ol3vl" path="res://scenes/world/player_disconnect_handler.gd" id="3_ecjtj"]
-[ext_resource type="PackedScene" uid="uid://dtlnxdmmrq5lc" path="res://scenes/objects/object_placeholder.tscn" id="3_ggr7k"]
+[ext_resource type="Script" uid="uid://difax78t3iblc" path="res://scenes/world/player_disconnect_handler.gd" id="3_ecjtj"]
 [ext_resource type="PackedScene" uid="uid://dlngg0ky7ua4m" path="res://scenes/objects/physics cube/cube.tscn" id="4_iwaqr"]
 [ext_resource type="Script" uid="uid://8iyqbbtl2uko" path="res://scenes/world/chat_box_manager.gd" id="4_vq23v"]
+[ext_resource type="Script" uid="uid://opmbdqhu8sw6" path="res://scenes/world/player_handler.gd" id="5_hup2d"]
+[ext_resource type="Script" uid="uid://b1mvsa3unehjf" path="res://scenes/world/player_grab_handler.gd" id="8_6jk3k"]
+[ext_resource type="Script" uid="uid://b45wfvomqpb3k" path="res://scenes/world/avatar_change_handler.gd" id="9_owvy0"]
+[ext_resource type="Script" uid="uid://by3rlfc24r7up" path="res://scenes/objects/interactable_message_handler.gd" id="10_hl3hq"]
 
 [sub_resource type="Gradient" id="Gradient_yj1bh"]
 offsets = PackedFloat32Array(0, 0.00793651, 0.015873, 0.0238095, 0.031746, 1)
@@ -26,28 +28,39 @@ size = Vector2(20, 20)
 
 [sub_resource type="WorldBoundaryShape3D" id="WorldBoundaryShape3D_agtxg"]
 
-[node name="DebugWorld" type="Node" node_paths=PackedStringArray("spawn_point")]
+[node name="World" type="Node" node_paths=PackedStringArray("spawn_point", "chat_box_manager", "player_grab_handler", "avatar_change_handler", "interactable_handler")]
 script = ExtResource("1_2wqxu")
 spawn_point = NodePath("MeshInstance3D/Spawn")
+chat_box_manager = NodePath("WorldComponents/ChatBoxManager")
+player_grab_handler = NodePath("WorldComponents/PlayerGrabHandler")
+avatar_change_handler = NodePath("WorldComponents/AvatarChangeHandler")
+interactable_handler = NodePath("WorldComponents/InteractableMessageHandler")
 
 [node name="WorldComponents" type="Node" parent="."]
 
-[node name="NetworkNodeBuilder" type="Node" parent="WorldComponents"]
-script = ExtResource("2_78dre")
-prefabs = {
-0: "res://scenes/player/player.tscn",
-1: "res://scenes/objects/physics cube/cube.tscn"
-}
-path_offsets = {
-0: 2,
-1: 2
-}
-
-[node name="PlayerDisconnectHandler" type="Node" parent="WorldComponents"]
+[node name="PlayerLeaveHandler" type="MessageHandler" parent="WorldComponents"]
+message_type = 2
 script = ExtResource("3_ecjtj")
 
-[node name="ChatBoxManager" type="Node" parent="WorldComponents"]
+[node name="ChatBoxManager" type="MessageHandler" parent="WorldComponents"]
+message_type = 3
 script = ExtResource("4_vq23v")
+
+[node name="PlayerJoinHandler" type="MessageHandler" parent="WorldComponents"]
+message_type = 1
+script = ExtResource("5_hup2d")
+
+[node name="PlayerGrabHandler" type="MessageHandler" parent="WorldComponents"]
+message_type = 5
+script = ExtResource("8_6jk3k")
+
+[node name="AvatarChangeHandler" type="MessageHandler" parent="WorldComponents"]
+message_type = 6
+script = ExtResource("9_owvy0")
+
+[node name="InteractableMessageHandler" type="MessageHandler" parent="WorldComponents"]
+message_type = 7
+script = ExtResource("10_hl3hq")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
 mesh = SubResource("PlaneMesh_64wdw")
@@ -60,12 +73,11 @@ collision_mask = 17
 shape = SubResource("WorldBoundaryShape3D_agtxg")
 
 [node name="Spawn" type="Node3D" parent="MeshInstance3D"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.27372, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.35851, 1.78033, 4.79102)
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(0.88165, -0.211182, 0.422014, -0.117749, 0.767547, 0.630085, -0.456978, -0.605206, 0.651841, 0, 2.35174, 0)
 shadow_enabled = true
 
-[node name="ObjectPlaceholder" parent="." instance=ExtResource("3_ggr7k")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.989319, -4.96407)
-object = ExtResource("4_iwaqr")
+[node name="Cube" parent="." instance=ExtResource("4_iwaqr")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.50173, 0.775348, 0)

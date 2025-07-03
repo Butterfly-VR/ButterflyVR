@@ -1,4 +1,4 @@
-extends Node
+extends MessageHandler
 class_name ChatBoxManager
 
 signal new_message_sent(message:Message)
@@ -9,14 +9,24 @@ class Message:
 	var player:int
 	var text:String
 
-func _physics_process(_delta: float) -> void:
-	if (NetworkManager as NetNodeManager).has_message() and (NetworkManager as NetNodeManager).get_message_type() == 3:
-		@warning_ignore("unsafe_call_argument")
-		var player:int = (NetworkManager as NetNodeManager).get_message_player()
-		var text:String = (NetworkManager as NetNodeManager).peek_message()[0]
-		var message:Message = Message.new()
-		message.player = player
-		message.text = text
-		new_message_sent.emit(message)
-		messages.append(message)
-		(NetworkManager as NetNodeManager).pop_message()
+
+func send_message(message:String) -> void:
+	while !(NetworkManager as NetNodeManager).id_ready():
+		await get_tree().physics_frame
+	var player:int = (NetworkManager as NetNodeManager).get_id()
+	send_message_final([player, message], [_get_value_type(null, 0), _get_value_type(player, 1)])
+
+func _get_value_type(_previous_value: Variant, idx: int) -> int:
+	match idx:
+		0:
+			return 2
+		1:
+			return 6
+	return -1
+
+func _process_message(values: Array) -> void:
+	var message:Message = Message.new()
+	message.player = values[0]
+	message.text = values[1]
+	new_message_sent.emit(message)
+	messages.append(message)

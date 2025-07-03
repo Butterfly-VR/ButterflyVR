@@ -2,22 +2,19 @@ extends Node
 class_name WorldController
 
 @export var spawn_point:Node3D
+@export var chat_box_manager:ChatBoxManager
+@export var player_grab_handler:PlayerGrabHandler
+@export var avatar_change_handler:AvatarChangeHandler
+@export var interactable_handler:InteractableHandler
 
-func _ready() -> void:
+func _init() -> void:
 	GlobalWorldAccess.current_world = self
 
-func _physics_process(_delta: float) -> void:
-	if (NetworkManager as NetNodeManager).has_message() and (NetworkManager as NetNodeManager).get_message_type() == 6:
-		var player:MovementHandler = preload("res://scenes/player/player.tscn").instantiate()
-		player.position = spawn_point.global_position
-		player.rotation = spawn_point.global_rotation
-		player.networker.owner_id = (NetworkManager as NetNodeManager).get_message_player()
-		(NetworkManager as NetNodeManager).pop_message()
-		add_child.call_deferred(player)
-	
+func _ready() -> void:
 	while !(NetworkManager as NetNodeManager).id_ready():
 		await get_tree().physics_frame
 	if (NetworkManager as NetNodeManager).get_id() == 0:
-		if (NetworkManager as NetNodeManager).has_message() and (NetworkManager as NetNodeManager).get_message_type() == 3:
-			print(str((NetworkManager as NetNodeManager).get_message_player()) + ": " + (NetworkManager as NetNodeManager).peek_message()[0])
-			(NetworkManager as NetNodeManager).pop_message()
+		chat_box_manager.new_message_sent.connect(log_chat_to_console)
+
+func log_chat_to_console(message:ChatBoxManager.Message) -> void:
+	print("Player " + str(message.player) + ": " + message.text)

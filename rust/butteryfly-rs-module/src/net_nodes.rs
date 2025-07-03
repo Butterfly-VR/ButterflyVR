@@ -13,8 +13,6 @@ pub struct NetworkedNode {
     pub objectid: u16,
     #[var]
     pub owner_id: u16,
-    #[export]
-    pub object_type: u8,
     base: Base<Node>,
 }
 
@@ -100,6 +98,23 @@ pub impl NetworkedNode {
 #[godot_api]
 impl INode for NetworkedNode {
     fn enter_tree(&mut self) {
+        if self
+            .base()
+            .get_node_as::<NetNodeManager>("/root/NetworkManager")
+            .bind_mut()
+            .is_server()
+        {
+            self.objectid = self
+                .base()
+                .get_node_as::<NetNodeManager>("/root/NetworkManager")
+                .bind_mut()
+                .get_next_object_id();
+        }
+        if let Some(parent) = self.base().get_parent() {
+            if parent.has_meta("owner_id") {
+                self.owner_id = u16::from_variant(&parent.get_meta("owner_id"));
+            }
+        }
         self.base()
             .get_node_as::<NetNodeManager>("/root/NetworkManager")
             .bind_mut()

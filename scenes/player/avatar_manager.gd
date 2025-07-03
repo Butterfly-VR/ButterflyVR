@@ -13,15 +13,11 @@ func _ready() -> void:
 	networker = get_parent().get_parent().networker
 	if equiped_avatar:
 		setup_avatar(equiped_avatar)
+	GlobalWorldAccess.current_world.avatar_change_handler.avatar_changed.connect(change_avatar)
 
-func _physics_process(_delta: float) -> void:
-	if (NetworkManager as NetNodeManager).has_message() and (NetworkManager as NetNodeManager).get_message_type() == 5 and (NetworkManager as NetNodeManager).get_message_player() == networker.owner_id:
-		var values:Array = (NetworkManager as NetNodeManager).peek_message()
-		@warning_ignore("unsafe_call_argument")
-		change_avatar(values[0])
-		(NetworkManager as NetNodeManager).pop_message()
-
-func change_avatar(avatar:int) -> void:
+func change_avatar(player:int, avatar:int) -> void:
+	if player != networker.owner_id:
+		return
 	if equiped_avatar != null:
 		equiped_avatar.queue_free()
 	if avatar == 0:
