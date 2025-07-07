@@ -140,7 +140,7 @@ impl IAudioStreamPlayback for VoiceStreamPlayback {
     fn seek(&mut self, _position: f64) {
         return;
     }
-    unsafe fn mix(&mut self, buffer: *mut AudioFrame, _rate_scale: f32, frames: i32) -> i32 {
+    unsafe fn mix_rawptr(&mut self, buffer: *mut AudioFrame, _rate_scale: f32, frames: i32) -> i32 {
         if !self.is_playing {
             return frames;
         }
