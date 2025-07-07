@@ -100,17 +100,15 @@ pub impl NetworkedNode {
 #[godot_api]
 impl INode for NetworkedNode {
     fn enter_tree(&mut self) {
-        Gd::bind_mut(&mut Node::get_node_as::<NetNodeManager>(
-            &self.base(),
-            "/root/NetworkManager",
-        ))
-        .register_node(self.to_gd(), self);
+        self.base()
+            .get_node_as::<NetNodeManager>("/root/NetworkManager")
+            .bind_mut()
+            .register_node(self.to_gd(), self);
     }
     fn exit_tree(&mut self) {
-        Gd::bind_mut(&mut Node::get_node_as::<NetNodeManager>(
-            &self.base(),
-            "/root/NetworkManager",
-        ))
-        .unregister_node(self.to_gd());
+        self.base()
+            .get_node_as::<NetNodeManager>("/root/NetworkManager")
+            .bind_mut()
+            .unregister_node(self.to_gd());
     }
 }
