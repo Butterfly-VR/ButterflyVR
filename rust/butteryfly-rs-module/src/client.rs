@@ -7,7 +7,6 @@ use bitvec::prelude::*;
 use godot::classes::Engine;
 use godot::prelude::*;
 use netcode::{Client, NetcodeSocket};
-use std::cell::Cell;
 use std::collections::{HashSet, VecDeque};
 use std::time::UNIX_EPOCH;
 use std::time::{Duration, Instant, SystemTime};
@@ -29,7 +28,7 @@ pub struct NetNodeClient {
     pub networked_nodes: Vec<Gd<NetworkedNode>>,
     owned_nodes: Vec<(Gd<NetworkedNode>, i64)>,
     pub client_networker: ClientNetworker,
-    packet_buffers: Vec<Cell<Vec<BitVec<u64, Lsb0>>>>,
+    packet_buffers: VecDeque<Vec<BitVec<u64, Lsb0>>>,
     message_buffer: VecDeque<Box<dyn Message>>,
     incoming_message_buffer: VecDeque<Box<dyn Message>>,
     c1_miss_rate_average_percent: f32,
@@ -82,8 +81,8 @@ pub impl NetNodeClient {
         self.client_networker.client.as_mut().unwrap().connect();
         self.client_networker
             .send(BitVec::<u64, Lsb0>::new().as_bitslice(), CHANNEL_ACK);
-        self.packet_buffers.push(Cell::new(Vec::new()));
-        self.packet_buffers.push(Cell::new(Vec::new()));
+        self.packet_buffers.push_back(Vec::new());
+        self.packet_buffers.push_back(Vec::new());
         self.encoder_stream = self.voice_manager.create_encoder();
     }
     pub fn network_grab(&mut self, target: Gd<Node>) {
@@ -231,7 +230,7 @@ pub impl NetNodeClient {
                     if self.c1_miss_rate_average_percent > JITTER_BUFFER_INCREASE_THRESHOLD
                         && self.c1_miss_rates_last_frames.len() >= (HIT_RATE_HISTORY_LENGTH / 2)
                     {
-                        self.packet_buffers.push(Cell::new(Vec::new()));
+                        self.packet_buffers.push_back(Vec::new());
                         self.c1_hit_rates_last_frames.clear();
                         self.c1_miss_rates_last_frames.clear();
                     }
@@ -279,7 +278,7 @@ pub impl NetNodeClient {
                             && (latency.as_millis() as i128 - networker.latency.as_millis() as i128)
                                 >= buffer_min_jitter
                         {
-                            buffer.get_mut().push(packet);
+                            buffer.push(packet);
                             packet_accepted = true;
                             break;
                         }
@@ -305,7 +304,7 @@ pub impl NetNodeClient {
                     // yes this stores the packet number of every packet we get but c2 is only used once during initial connection
                     if !(self.c0_seen_packets.contains(&packet_number)) {
                         if self.packet_buffers.len() == 0 {
-                            self.packet_buffers[0].get_mut().push(packet)
+                            self.packet_buffers[0].push(packet)
                         }
                         self.c0_seen_packets.insert(packet_number);
                     }
@@ -415,14 +414,7 @@ pub impl NetNodeClient {
             / (self.c1_hit_rate_average + self.c1_miss_rate_average) as f32;
     }
     fn update_network_nodes(&mut self) {
-        // just takes ownership of the first buffer but need to account for having no buffers yet too
-        for packet in self
-            .packet_buffers
-            .get(0)
-            .or(Some(&Cell::new(Vec::new())))
-            .map(|x| x.take())
-            .unwrap()
-        {
+        for packet in self.packet_buffers.get(0).unwrap() {
             let mut pointer: usize = PACKET_HEADER_SIZE + CHANNEL1_HEADER_SIZE;
             while pointer + BYTES2 <= packet.len() {
                 let next_obj: u16 = packet[pointer..pointer + BYTES2].load_le();
@@ -554,10 +546,9 @@ impl INode for NetNodeClient {
                 idx += 1;
             }
         }
-        // shuffles the packet buffers down the vec, need to use cells to move ownership from behind self
-        for x in self.packet_buffers.windows(2) {
-            x[0].set(x[1].take());
-        }
+        self.packet_buffers.pop_front();
+        self.packet_buffers
+            .push_back(Vec::with_capacity(self.packet_buffers[0].len()));
         for node in self.owned_nodes.iter_mut() {
             node.1 += node.0.bind().get_priority(self.id);
         }

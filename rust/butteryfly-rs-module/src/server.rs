@@ -6,7 +6,6 @@ use crate::voice;
 use crate::voice::FRAME_LENGTH;
 use bitvec::prelude::*;
 use build_time::build_time_utc;
-use std::cell::Cell;
 use std::collections::{HashSet, VecDeque};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use std::{cmp, collections::HashMap};
@@ -140,15 +139,8 @@ pub impl NetNodeServer {
         }
     }
     fn update_network_nodes(&mut self) {
-        for client in self.server_networker.clients.iter() {
-            for packet_tuple in client
-                .1
-                .packet_buffers
-                .first()
-                .or(Some(&Cell::new(Vec::new())))
-                .map(|x| x.take())
-                .unwrap()
-            {
+        for client in self.server_networker.clients.iter_mut() {
+            for packet_tuple in client.1.packet_buffers.get_mut(0).unwrap().drain(..) {
                 let packet = packet_tuple.0;
                 let mut pointer: usize = PACKET_HEADER_SIZE + CHANNEL1_HEADER_SIZE;
                 while pointer + BYTES2 <= packet.len() {
@@ -412,7 +404,7 @@ pub impl NetNodeServer {
                             && (latency.as_millis() as i128 - client.latency.as_millis() as i128)
                                 >= buffer_min_jitter
                         {
-                            buffer.get_mut().push(packet_tuple);
+                            buffer.push(packet_tuple);
                             packet_accepted = true;
                             break;
                         }
@@ -512,7 +504,7 @@ pub impl NetNodeServer {
                 && client.c1_latency_info.c1_miss_rate_last_frames.len()
                     >= HIT_RATE_HISTORY_LENGTH / 2
             {
-                client.packet_buffers.push(Cell::new(Vec::new()));
+                client.packet_buffers.push_back(Vec::new());
                 client.c1_latency_info = LatencyInfo::default()
             }
             networker
@@ -719,10 +711,9 @@ pub impl NetNodeServer {
 impl INode for NetNodeServer {
     fn physics_process(&mut self, _delta: f64) {
         // cycle channel 1 packet buffers
-        for client in self.server_networker.clients.iter() {
-            for x in client.1.packet_buffers.windows(2) {
-                x[0].set(x[1].take());
-            }
+        for client in self.server_networker.clients.iter_mut() {
+            client.1.packet_buffers.pop_front();
+            client.1.packet_buffers.push_back(Vec::new());
         }
         for client in self.server_networker.clients.values_mut() {
             let priorities = client.priorities.iter_mut();
@@ -919,10 +910,7 @@ impl ServerNetworker {
                         next_c4_packet_number: 0,
                         next_c5_packet_number: 0,
                         c3_buffered_packets: Vec::new(),
-                        packet_buffers: Vec::from_iter([
-                            Cell::new(Vec::new()),
-                            Cell::new(Vec::new()),
-                        ]),
+                        packet_buffers: VecDeque::from_iter([Vec::new(), Vec::new()]),
                     },
                 );
                 new_players.push(self.next_client_id);
@@ -1150,7 +1138,7 @@ struct Client {
     next_c4_packet_number: u64,
     next_c5_packet_number: u64,
     c3_buffered_packets: Vec<BitVec<u64, Lsb0>>,
-    packet_buffers: Vec<Cell<Vec<(BitVec<u64, Lsb0>, ClientIndex)>>>,
+    packet_buffers: VecDeque<Vec<(BitVec<u64, Lsb0>, ClientIndex)>>,
 }
 #[derive(Debug, Default, Clone)]
 struct LatencyInfo {
