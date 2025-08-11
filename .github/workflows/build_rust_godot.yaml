@@ -1,0 +1,75 @@
+name: Build Rust + Godot
+
+on:
+  push:
+  pull_request:
+
+env:
+  GODOT_VERSION: 4.4.1
+  EXPORT_NAME: ButterflyVR
+  PROJECT_PATH: .
+
+jobs:
+  rust:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        build_type: [debug, release]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/butteryfly-rs-module/target
+          key: ${{ runner.os }}-cargo-${{ matrix.build_type }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-${{ matrix.build_type }}-
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Build Rust module
+        working-directory: rust/butteryfly-rs-module
+        run: cargo build ${{ matrix.build_type == 'release' && '--release' || '' }}
+
+      - name: Upload Rust artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-${{ matrix.os }}-${{ matrix.build_type }}
+          path: rust/butteryfly-rs-module/target/${{ matrix.build_type }}
+
+  godot-linux:
+    runs-on: ubuntu-22.04
+    container:
+      image: barichello/godot-ci:4.4.1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Setup Godot templates
+        run: |
+          mkdir -p ~/.local/share/godot/export_templates/
+          mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+
+      - name: Export Linux (debug)
+        run: |
+          mkdir -p build/linux
+          EXPORT_DIR="$(readlink -f build/linux)"
+          cd $PROJECT_PATH
+          godot --headless --verbose --export-debug "Linux/X11" "$EXPORT_DIR/${EXPORT_NAME}.x86_64"
+
+      - name: Upload Godot artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-linux-debug
+          path: build/linux
