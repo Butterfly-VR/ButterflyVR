@@ -16,7 +16,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        build_type: [debug, release]
     steps:
       - uses: actions/checkout@v4
 
@@ -27,8 +26,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             rust/butteryfly-rs-module/target
-          key: ${{ runner.os }}-cargo-${{ matrix.build_type }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-${{ matrix.build_type }}-
+          key: ${{ runner.os }}-cargo-debug-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-debug-
 
       - name: Install Rust
         uses: actions-rs/toolchain@v1
@@ -37,24 +36,31 @@ jobs:
           profile: minimal
           override: true
 
-      - name: Build Rust module
+      - name: Build Rust module (debug)
         working-directory: rust/butteryfly-rs-module
-        run: cargo build ${{ matrix.build_type == 'release' && '--release' || '' }}
+        run: cargo build
 
       - name: Upload Rust artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rust-${{ matrix.os }}-${{ matrix.build_type }}
-          path: rust/butteryfly-rs-module/target/${{ matrix.build_type }}
+          name: rust-${{ matrix.os }}-debug
+          path: rust/butteryfly-rs-module/target/debug/*
 
   godot-linux:
     runs-on: ubuntu-22.04
+    needs: rust
     container:
       image: barichello/godot-ci:4.4.1
     steps:
       - uses: actions/checkout@v4
         with:
           lfs: true
+
+      - name: Download Linux Rust artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rust-ubuntu-latest-debug
+          path: rust/butteryfly-rs-module/target/debug
 
       - name: Setup Godot templates
         run: |
@@ -68,8 +74,42 @@ jobs:
           cd $PROJECT_PATH
           godot --headless --verbose --export-debug "Linux/X11" "$EXPORT_DIR/${EXPORT_NAME}.x86_64"
 
-      - name: Upload Godot artifact
+      - name: Upload Godot Linux artifact
         uses: actions/upload-artifact@v4
         with:
           name: godot-linux-debug
           path: build/linux
+
+  godot-windows:
+    runs-on: ubuntu-22.04
+    needs: rust
+    container:
+      image: barichello/godot-ci:4.4.1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Download Windows Rust artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rust-windows-latest-debug
+          path: rust/butteryfly-rs-module/target/debug
+
+      - name: Setup Godot templates
+        run: |
+          mkdir -p ~/.local/share/godot/export_templates/
+          mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+
+      - name: Export Windows (debug)
+        run: |
+          mkdir -p build/windows
+          EXPORT_DIR="$(readlink -f build/windows)"
+          cd $PROJECT_PATH
+          godot --headless --verbose --export-debug "Windows Desktop" "$EXPORT_DIR/${EXPORT_NAME}.exe"
+
+      - name: Upload Godot Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-windows-debug
+          path: build/windows
