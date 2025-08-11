@@ -28,4 +28,4 @@ func _ready() -> void:
 	for i:int in range(token_number):
 		print((NetworkManager as NetNodeManager).get_next_client().hex_encode())
 		await get_tree().physics_frame
-	get_tree().change_scene_to_file.call_deferred("res://scenes/world/debug_world.tscn")
+	get_tree().change_scene_to_file("res://scenes/world/debug_world.tscn")

@@ -4,7 +4,7 @@ var fading:bool = false
 
 func _ready() -> void:
 	@warning_ignore("unsafe_property_access", "unsafe_method_access")
-	GlobalWorldAccess.current_world.get_child(0).get_child(2).new_message_sent.connect(on_message)
+	GlobalWorldAccess.current_world.chat_box_manager.new_message_sent.connect(on_message)
 
 func on_message(message:ChatBoxManager.Message) -> void:
 	@warning_ignore("unsafe_property_access")

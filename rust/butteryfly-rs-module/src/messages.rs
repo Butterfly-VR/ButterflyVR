@@ -1,339 +1,165 @@
+use crate::{
+    NetNodeManager,
+    net_nodes::NetworkedNode,
+    serializer::{self, NetworkedValueTypes},
+};
 use bitvec::prelude::*;
-use dyn_clone::DynClone;
 use godot::prelude::*;
-use std::any::Any;
 
 const BYTE: usize = 8;
 const BYTES2: usize = 16;
-const BYTES8: usize = 64;
 
-pub trait Message: DynClone {
-    fn encode_message(&self) -> BitVec;
-    fn decode_message(&mut self, pointer: &mut usize, data: &BitSlice<u64>);
-    fn get_message_type(&self) -> u8;
-    fn get_message_contents(&self) -> VariantArray;
-    fn get_player(&self) -> u16;
-    fn as_any(&self) -> &dyn Any;
+#[derive(GodotClass)]
+#[class(init, base=Node)]
+pub struct MessageHandler {
+    #[export]
+    pub message_type: u16,
+    network_manager: Option<Gd<NetNodeManager>>,
+    base: Base<Node>,
 }
-
-#[derive(Debug, Default, Clone)]
-pub struct NetworkObjectCreation {
-    pub node_type: u8,
-    pub owner_id: u16,
-    pub object_id: u16,
-    pub node_path: String,
-}
-impl Message for NetworkObjectCreation {
-    fn encode_message(&self) -> BitVec {
-        let mut packet: BitVec = BitVec::with_capacity(1000); // temporary, replace when we have size hints
-        packet.extend(self.node_type.view_bits::<Lsb0>());
-        packet.extend(self.owner_id.view_bits::<Lsb0>());
-        packet.extend(self.object_id.view_bits::<Lsb0>());
-        for byte in self.node_path.as_bytes() {
-            packet.extend(byte.view_bits::<Lsb0>());
+#[godot_api]
+pub impl MessageHandler {
+    #[func(virtual)]
+    fn get_value_type(&mut self, _previous_value: Variant, _idx: i64) -> i64 {
+        unimplemented!()
+    }
+    #[func(virtual)]
+    fn process_message(&mut self, _values: VariantArray) {
+        unimplemented!()
+    }
+    #[func]
+    fn send_message_final(&mut self, values: VariantArray, types: Array<i64>) {
+        if values.len() != types.len() {
+            godot_warn!("invalid call to send_message_final");
+            return;
         }
-        return packet;
-    }
-    fn decode_message(&mut self, pointer: &mut usize, data: &BitSlice<u64>) {
-        self.node_type = data[*pointer..*pointer + BYTE].load_le();
-        *pointer += BYTE;
-        self.owner_id = data[*pointer..*pointer + BYTES2].load_le();
-        *pointer += BYTES2;
-        self.object_id = data[*pointer..*pointer + BYTES2].load_le();
-        *pointer += BYTES2;
-        let mut bytes: Vec<u8> = Vec::with_capacity((data[*pointer..].len() / BYTE) + 1);
-        for bits in data[*pointer..].chunks(BYTE) {
-            bytes.push(bits.load_le())
+        if types
+            .iter_shared()
+            .any(|x| NetworkedValueTypes::try_from(x).is_err())
+        {
+            godot_warn!("invalid call to send_message_final");
+            return;
         }
-        self.node_path = String::from_utf8_lossy(&bytes).to_string();
-    }
 
-    fn get_message_type(&self) -> u8 {
-        return 0;
-    }
-    fn get_message_contents(&self) -> VariantArray {
-        return Array::from_iter(
-            [
-                self.node_type.to_variant(),
-                self.owner_id.to_variant(),
-                self.object_id.to_variant(),
-                self.node_path.to_variant(),
-            ]
-            .into_iter(),
-        );
-    }
-    fn get_player(&self) -> u16 {
-        return 0;
-    }
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct PlayerPhysicsGrab {
-    pub player: u16,
-    pub target: String,
-}
-impl Message for PlayerPhysicsGrab {
-    fn encode_message(&self) -> BitVec {
-        let mut packet: BitVec = BitVec::with_capacity(1000); // temporary, replace when we have size hints
-        packet.extend(self.player.view_bits::<Lsb0>());
-        for byte in self.target.as_bytes() {
-            packet.extend(byte.view_bits::<Lsb0>());
+        let types = types
+            .iter_shared()
+            .map(|x| NetworkedValueTypes::try_from(x).unwrap())
+            .collect::<Vec<NetworkedValueTypes>>();
+        let mut packet: BitVec<u64, Lsb0> = BitVec::new();
+        packet.extend(self.message_type.view_bits::<Lsb0>());
+        for value in values.iter_shared().enumerate() {
+            packet.extend(serializer::encode_with_known_type(
+                &value.1,
+                &types[value.0],
+            ));
         }
-        return packet;
-    }
-    fn decode_message(&mut self, pointer: &mut usize, data: &BitSlice<u64>) {
-        self.player = data[*pointer..*pointer + BYTES2].load_le();
-        *pointer += BYTES2;
-        let mut bytes: Vec<u8> = Vec::with_capacity((data[*pointer..].len() / BYTE) + 1);
-        for bits in data[*pointer..].chunks(BYTE) {
-            bytes.push(bits.load_le())
+
+        if self
+            .network_manager
+            .as_mut()
+            .unwrap()
+            .bind_mut()
+            .is_server()
+        {
+            godot_warn!("handling on server");
+            self.handle_message(packet.clone().as_bitslice(), &mut BYTES2.clone());
         }
-        self.target = String::from_utf8_lossy(&bytes).to_string();
+        self.network_manager
+            .as_mut()
+            .unwrap()
+            .bind_mut()
+            .queue_message(packet);
     }
-
-    fn get_message_type(&self) -> u8 {
-        return 1;
-    }
-    fn get_message_contents(&self) -> VariantArray {
-        return Array::from_iter([self.target.to_variant()].into_iter());
-    }
-    fn get_player(&self) -> u16 {
-        return self.player;
-    }
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-#[derive(Debug, Default, Clone)]
-pub struct PlayerPhysicsRelease {
-    pub player: u16,
-}
-impl Message for PlayerPhysicsRelease {
-    fn encode_message(&self) -> BitVec {
-        let mut packet: BitVec = BitVec::with_capacity(1000); // temporary, replace when we have size hints
-        packet.extend(self.player.view_bits::<Lsb0>());
-        return packet;
-    }
-    fn decode_message(&mut self, pointer: &mut usize, data: &BitSlice<u64>) {
-        self.player = data[*pointer..*pointer + BYTES2].load_le();
-        *pointer += BYTES2;
-    }
-
-    fn get_message_type(&self) -> u8 {
-        return 2;
-    }
-    fn get_message_contents(&self) -> VariantArray {
-        return Array::from_iter([].into_iter());
-    }
-    fn get_player(&self) -> u16 {
-        return self.player;
-    }
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct ChatBoxMessageSent {
-    pub player: u16,
-    pub message: String,
-}
-impl Message for ChatBoxMessageSent {
-    fn encode_message(&self) -> BitVec {
-        let mut packet: BitVec = BitVec::with_capacity(1000); // temporary, replace when we have size hints
-        packet.extend(self.player.view_bits::<Lsb0>());
-        for byte in self.message.as_bytes() {
-            packet.extend(byte.view_bits::<Lsb0>());
+    pub fn handle_message(&mut self, packet: &BitSlice<u64, Lsb0>, pointer: &mut usize) {
+        let mut idx = 0;
+        let mut last_value = Variant::nil();
+        let mut values: VariantArray = VariantArray::new();
+        while *pointer < packet.len() {
+            let value_type =
+                &NetworkedValueTypes::try_from(self.get_value_type(last_value, idx)).unwrap();
+            last_value = serializer::decode_with_known_type(packet, pointer, value_type).unwrap();
+            values.push(&last_value);
+            idx += 1;
         }
-        return packet;
+        self.apply_deferred(|this| this.process_message(values));
     }
-    fn decode_message(&mut self, pointer: &mut usize, data: &BitSlice<u64>) {
-        self.player = data[*pointer..*pointer + BYTES2].load_le();
-        *pointer += BYTES2;
-        let mut bytes: Vec<u8> = Vec::with_capacity((data[*pointer..].len() / BYTE) + 1);
-        for bits in data[*pointer..].chunks(BYTE) {
-            bytes.push(bits.load_le())
+    pub fn create_id_sync_message(
+        object: Gd<Node>,
+        object_id: u16,
+        owner_id: Option<u16>,
+    ) -> BitVec<u64, Lsb0> {
+        let mut packet: BitVec<u64, Lsb0> = BitVec::new();
+        packet.extend(0u16.view_bits::<Lsb0>());
+        packet.extend(object_id.view_bits::<Lsb0>());
+        packet.extend(owner_id.unwrap_or(0).view_bits::<Lsb0>());
+        let mut index_path: Vec<u8> = Vec::with_capacity(8);
+        index_path.push(object.get_index() as u8);
+        let mut last_parent: Option<Gd<Node>>;
+        last_parent = object.get_parent();
+        loop {
+            if let Some(parent) = last_parent {
+                last_parent = parent.get_parent();
+                index_path.push(parent.get_index() as u8);
+            } else {
+                break;
+            }
         }
-        self.message = String::from_utf8_lossy(&bytes).to_string();
-    }
-    fn get_message_type(&self) -> u8 {
-        return 3;
-    }
-
-    fn get_message_contents(&self) -> VariantArray {
-        return Array::from_iter([self.message.to_variant()].into_iter());
-    }
-    fn get_player(&self) -> u16 {
-        return self.player;
-    }
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-#[derive(Debug, Default, Clone)]
-pub struct PlayerDc {
-    pub player: u16,
-}
-impl Message for PlayerDc {
-    fn decode_message(&mut self, pointer: &mut usize, data: &BitSlice<u64>) {
-        self.player = data[*pointer..*pointer + BYTES2].load_le();
-    }
-    fn encode_message(&self) -> BitVec {
-        let mut packet: BitVec = BitVec::with_capacity(BYTES2); // temporary, replace when we have size hints
-        packet.extend(self.player.view_bits::<Lsb0>());
-        return packet;
-    }
-    fn get_message_type(&self) -> u8 {
-        return 4;
-    }
-
-    fn get_message_contents(&self) -> VariantArray {
-        return Array::from_iter([].into_iter());
-    }
-    fn get_player(&self) -> u16 {
-        return self.player;
-    }
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-#[derive(Debug, Default, Clone)]
-pub struct PlayerAvatarChange {
-    pub player: u16,
-    pub avatar: u64,
-}
-impl Message for PlayerAvatarChange {
-    fn encode_message(&self) -> BitVec {
-        let mut packet: BitVec = BitVec::with_capacity(1000); // temporary, replace when we have size hints
-        packet.extend(self.player.view_bits::<Lsb0>());
-        packet.extend(self.avatar.view_bits::<Lsb0>());
-        return packet;
-    }
-    fn decode_message(&mut self, pointer: &mut usize, data: &BitSlice<u64>) {
-        self.player = data[*pointer..*pointer + BYTES2].load_le();
-        *pointer += BYTES2;
-        self.avatar = data[*pointer..*pointer + BYTES8].load_le();
-        *pointer += BYTES8;
-    }
-
-    fn get_message_type(&self) -> u8 {
-        return 5;
-    }
-    fn get_message_contents(&self) -> VariantArray {
-        return Array::from_iter([self.avatar.to_variant()].into_iter());
-    }
-    fn get_player(&self) -> u16 {
-        return self.player;
-    }
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-#[derive(Debug, Default, Clone)]
-pub struct ChangeObjectOwnership {
-    pub objectid: u16,
-    pub player: u16,
-}
-impl Message for ChangeObjectOwnership {
-    fn decode_message(&mut self, pointer: &mut usize, data: &BitSlice<u64>) {
-        self.player = data[*pointer..*pointer + BYTES2].load_le();
-        *pointer += BYTES2;
-        self.objectid = data[*pointer..*pointer + BYTES2].load_le();
-    }
-    fn encode_message(&self) -> BitVec {
-        let mut packet: BitVec = BitVec::with_capacity(BYTES8);
-        packet.extend(self.player.view_bits::<Lsb0>());
-        packet.extend(self.objectid.view_bits::<Lsb0>());
-        return packet;
-    }
-    fn get_message_type(&self) -> u8 {
-        return 7;
-    }
-
-    fn get_message_contents(&self) -> VariantArray {
-        return Array::from_iter([].into_iter());
-    }
-    fn get_player(&self) -> u16 {
-        return self.player;
-    }
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-#[derive(Debug, Default, Clone)]
-pub struct PlayerInteract {
-    pub interaction_type: u8,
-    pub player: u16,
-    pub interactable_path: String,
-}
-impl Message for PlayerInteract {
-    fn decode_message(&mut self, pointer: &mut usize, data: &BitSlice<u64>) {
-        self.player = data[*pointer..*pointer + BYTES2].load_le();
-        *pointer += BYTES2;
-        self.interaction_type = data[*pointer..*pointer + BYTE].load_le();
-        *pointer += BYTE;
-        let mut bytes: Vec<u8> = Vec::with_capacity((data[*pointer..].len() / BYTE) + 1);
-        for bits in data[*pointer..].chunks(BYTE) {
-            bytes.push(bits.load_le())
+        index_path.pop();
+        for item in index_path.iter().rev() {
+            packet.extend(item.view_bits::<Lsb0>())
         }
-        self.interactable_path = String::from_utf8_lossy(&bytes).to_string();
-    }
-    fn encode_message(&self) -> BitVec {
-        let mut packet: BitVec = BitVec::with_capacity(BYTES8);
-        packet.extend(self.player.view_bits::<Lsb0>());
-        packet.extend(self.interaction_type.view_bits::<Lsb0>());
-        for byte in self.interactable_path.as_bytes() {
-            packet.extend(byte.view_bits::<Lsb0>());
-        }
-        return packet;
-    }
-    fn get_message_type(&self) -> u8 {
-        return 8;
-    }
-
-    fn get_message_contents(&self) -> VariantArray {
-        return Array::from_iter(
-            [
-                self.interaction_type.to_variant(),
-                self.interactable_path.to_variant(),
-            ]
-            .into_iter(),
-        );
-    }
-    fn get_player(&self) -> u16 {
-        return self.player;
-    }
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-#[derive(Debug, Default, Clone)]
-pub struct PlayerJoin {
-    pub player: u16,
-}
-impl Message for PlayerJoin {
-    fn decode_message(&mut self, pointer: &mut usize, data: &BitSlice<u64>) {
-        self.player = data[*pointer..*pointer + BYTES2].load_le();
-    }
-    fn encode_message(&self) -> BitVec {
-        let mut packet: BitVec = BitVec::with_capacity(BYTES2);
-        packet.extend(self.player.view_bits::<Lsb0>());
         packet
     }
-    fn get_message_type(&self) -> u8 {
-        6
+    pub fn handle_id_sync_message(
+        message: &BitSlice<u64, Lsb0>,
+        pointer: &mut usize,
+        root_object: Gd<Node>,
+    ) {
+        let mut object = Some(root_object);
+        let id: u16 = message[*pointer..*pointer + BYTES2].load_le();
+        *pointer += BYTES2;
+        let owner_id: u16 = message[*pointer..*pointer + BYTES2].load_le();
+        *pointer += BYTES2;
+        while let Some(index) = message.get(*pointer..*pointer + BYTE) {
+            let index: u8 = index.load_le();
+            object = object.unwrap().get_child(index as i32);
+            if object.is_none() {
+                godot_warn!("failed to apply id to object");
+                return;
+            }
+            *pointer += BYTE;
+        }
+        let mut object = object.unwrap();
+        let casted_object = object.try_cast::<NetworkedNode>();
+        if let Ok(mut object) = casted_object {
+            object.bind_mut().objectid = id;
+            object.bind_mut().owner_id = owner_id;
+        } else {
+            object = casted_object.unwrap_err();
+            let casted_object = object.try_cast::<MessageHandler>();
+            if let Ok(mut object) = casted_object {
+                object.bind_mut().message_type = id;
+            }
+        }
     }
-
-    fn get_message_contents(&self) -> VariantArray {
-        Array::from_iter([])
+}
+#[godot_api]
+impl INode for MessageHandler {
+    fn enter_tree(&mut self) {
+        self.network_manager = Some(
+            self.base()
+                .get_node_as::<NetNodeManager>("/root/NetworkManager"),
+        );
+        self.base()
+            .get_node_as::<NetNodeManager>("/root/NetworkManager")
+            .bind_mut()
+            .register_message_handler(self.to_gd(), self.message_type);
     }
-    fn get_player(&self) -> u16 {
-        self.player
-    }
-    fn as_any(&self) -> &dyn Any {
-        self
+    fn exit_tree(&mut self) {
+        self.network_manager
+            .as_mut()
+            .unwrap()
+            .bind_mut()
+            .unregister_message_handler(self.message_type);
     }
 }

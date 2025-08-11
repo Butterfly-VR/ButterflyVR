@@ -1,6 +1,7 @@
 // serialization functions for networkednode values
 use bitvec::prelude::*;
 use godot::prelude::*;
+use std::borrow::Cow;
 
 const BYTE: usize = 8;
 const BYTES2: usize = 16;
@@ -15,18 +16,26 @@ pub enum NetworkedValueTypes {
     Signed64,
     Float32,
     Vector3,
+    String,
+    ByteArray,
 }
 impl TryFrom<i64> for NetworkedValueTypes {
-    type Error = &'static str;
+    type Error = Cow<'static, str>;
     fn try_from(value: i64) -> Result<Self, Self::Error> {
         match value {
+            -1 => Err(Cow::Borrowed("invalid type")),
             0 => Ok(NetworkedValueTypes::Bool),
             1 => Ok(NetworkedValueTypes::Unsigned8),
             2 => Ok(NetworkedValueTypes::Unsigned16),
             3 => Ok(NetworkedValueTypes::Signed64),
             4 => Ok(NetworkedValueTypes::Float32),
             5 => Ok(NetworkedValueTypes::Vector3),
-            _ => Err("out of range"),
+            6 => Ok(NetworkedValueTypes::String),
+            7 => Ok(NetworkedValueTypes::ByteArray),
+            _ => Err(Cow::Owned(format!(
+                "tried to parse nonexistent type {:#?}",
+                value
+            ))),
         }
     }
 }
@@ -115,6 +124,48 @@ pub fn decode_with_known_type(
             *pointer += BYTES4;
             Some(Vector3::new(x, y, z).to_variant())
         }
+        NetworkedValueTypes::String => {
+            if *pointer + BYTES4 > data.len() {
+                return None;
+            }
+            let length = data[*pointer..*pointer + BYTES4].load_le::<u32>() as usize;
+            *pointer += BYTES4;
+            if *pointer + (length * BYTE) <= data.len() {
+                let result = Some(
+                    str::from_utf8(
+                        &data[*pointer..*pointer + (length * BYTE)]
+                            .chunks_exact(BYTE)
+                            .map(|x| x.load_le::<u8>())
+                            .collect::<Vec<u8>>(),
+                    )
+                    .unwrap_or("")
+                    .to_variant(),
+                );
+                *pointer += length * BYTE;
+                return result;
+            }
+            return None;
+        }
+
+        NetworkedValueTypes::ByteArray => {
+            if *pointer + BYTES4 > data.len() {
+                return None;
+            }
+            let length = data[*pointer..*pointer + BYTES4].load_le::<u32>() as usize;
+            *pointer += BYTES4;
+            if *pointer + (length * BYTE) <= data.len() {
+                let result = Some(
+                    data[*pointer..*pointer + (length * BYTE)]
+                        .chunks_exact(BYTE)
+                        .map(|x| x.load_le::<u8>())
+                        .collect::<Vec<u8>>()
+                        .to_variant(),
+                );
+                *pointer += length * BYTE;
+                return result;
+            }
+            return None;
+        }
     }
 }
 pub fn encode_with_known_type(
@@ -161,6 +212,26 @@ pub fn encode_with_known_type(
             bitvec.extend(y.view_bits::<Lsb0>());
             let z = u32::from_ne_bytes(vector.z.to_ne_bytes());
             bitvec.extend(z.view_bits::<Lsb0>());
+            bitvec
+        }
+        NetworkedValueTypes::String => {
+            let string = String::from_variant(object);
+            let length = string.len() as u32;
+            let mut bitvec = BitVec::with_capacity(BYTES4 + (BYTE * length as usize));
+            bitvec.extend(length.view_bits::<Lsb0>());
+            for char in string.bytes() {
+                bitvec.extend(char.view_bits::<Lsb0>());
+            }
+            bitvec
+        }
+        NetworkedValueTypes::ByteArray => {
+            let bytes: Array<i64> = Array::from_variant(object);
+            let length = bytes.len() as u32;
+            let mut bitvec = BitVec::with_capacity(BYTES4 + (BYTE * length as usize));
+            bitvec.extend(length.view_bits::<Lsb0>());
+            for byte in bytes.iter_shared().map(|x| x.try_into().unwrap_or(0u8)) {
+                bitvec.extend(byte.view_bits::<Lsb0>());
+            }
             bitvec
         }
     }

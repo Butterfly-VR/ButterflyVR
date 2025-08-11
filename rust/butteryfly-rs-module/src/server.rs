@@ -31,23 +31,23 @@ pub struct NetNodeServer {
     pub networked_nodes: Vec<Gd<NetworkedNode>>,
     voice_manager: voice::VoiceStreamManager,
     server_networker: ServerNetworker,
-    message_buffer: VecDeque<Box<dyn Message>>,
-    incoming_message_buffer: VecDeque<Box<dyn Message>>,
+    message_buffer: VecDeque<BitVec<u64, Lsb0>>,
+    message_handlers: HashMap<u16, Gd<MessageHandler>>,
     base: Base<Node>,
 }
 
 #[godot_api]
 pub impl NetNodeServer {
+    #[signal]
+    pub fn player_joined(player: u16);
+    #[signal]
+    pub fn player_left(player: u16);
     pub fn register_node(&mut self, new_node_ref: Gd<NetworkedNode>, new_node: &mut NetworkedNode) {
-        self.next_id += 1;
-        new_node.objectid = self.next_id;
-        let message: NetworkObjectCreation = NetworkObjectCreation {
-            node_type: new_node.object_type,
-            owner_id: new_node.owner_id,
-            object_id: new_node.objectid,
-            node_path: new_node_ref.get_path().to_string(),
-        };
-        self.message_buffer.push_back(Box::new(message));
+        self.queue_message(MessageHandler::create_id_sync_message(
+            new_node_ref.clone().upcast(),
+            new_node.objectid,
+            Some(new_node.owner_id),
+        ));
         self.networked_nodes.push(new_node_ref);
     }
     pub fn unregister_node(&mut self, removed_node_ref: Gd<NetworkedNode>) {
@@ -73,6 +73,19 @@ pub impl NetNodeServer {
         self.next_id = 0;
         self.networked_nodes.clear();
     }
+    pub fn get_next_object_id(&mut self) -> u16 {
+        self.next_id += 1;
+        self.next_id
+    }
+    pub fn register_message(&mut self, handler: Gd<MessageHandler>, message_type: u16) {
+        self.message_handlers.insert(message_type, handler);
+    }
+    pub fn unregister_message(&mut self, message_type: u16) {
+        self.message_handlers.remove(&message_type);
+    }
+    pub fn queue_message(&mut self, message: BitVec<u64, Lsb0>) {
+        self.message_buffer.push_back(message);
+    }
     pub fn start_server(&mut self, bind_addr: String, private_key: [u8; 32]) {
         const PROTOCOL_ID: u64 = 0;
         self.server_networker = ServerNetworker {
@@ -86,47 +99,6 @@ pub impl NetNodeServer {
             self.server_networker.get_token().try_into_bytes().unwrap();
         result.extend(tmp);
         result
-    }
-    pub fn has_message(&self) -> bool {
-        self.incoming_message_buffer.front().is_some()
-    }
-    pub fn peek_message(&self) -> &dyn Message {
-        self.incoming_message_buffer[0].as_ref()
-    }
-    pub fn pop_message(&mut self) {
-        self.incoming_message_buffer.pop_front();
-    }
-    pub fn get_message_type(&self) -> u8 {
-        self.incoming_message_buffer[0].get_message_type()
-    }
-    pub fn get_message_player(&self) -> u16 {
-        self.incoming_message_buffer[0].get_player()
-    }
-    pub fn change_object_ownership(&mut self, objectid: u16, player: u16) {
-        let message: ChangeObjectOwnership = ChangeObjectOwnership {
-            objectid: objectid,
-            player: player,
-        };
-        self.message_buffer.push_back(Box::new(message));
-        let message: ChangeObjectOwnership = ChangeObjectOwnership {
-            objectid: objectid,
-            player: player,
-        };
-        self.incoming_message_buffer.push_back(Box::new(message));
-    }
-    pub fn trigger_interaction(
-        &mut self,
-        player: u16,
-        interaction_type: u8,
-        interactable_path: String,
-    ) {
-        let message = PlayerInteract {
-            player: player,
-            interaction_type: interaction_type,
-            interactable_path: interactable_path,
-        };
-        self.message_buffer.push_back(Box::new(message.clone()));
-        self.incoming_message_buffer.push_back(Box::new(message));
     }
     pub fn register_player_object(&mut self, client_id: u16, object: Gd<Node3D>) {
         let client = self
@@ -167,7 +139,7 @@ pub impl NetNodeServer {
 
     fn send_packets_server(&mut self) {
         const PACKET_MAX_SIZE_THRESHOLD: usize = 80;
-        const BANDWIDTH_BUDGET: usize = 64000;
+        const BANDWIDTH_BUDGET: usize = 512000;
         const MAX_SINGLE_PACKET_PAYLOAD_LENGTH: usize = 4800;
         let bandwidth_per_tick =
             BANDWIDTH_BUDGET / Engine::singleton().get_physics_ticks_per_second() as usize;
@@ -202,10 +174,8 @@ pub impl NetNodeServer {
                 while self.message_buffer.len() > client.1.message_buffer_position {
                     let mut packet: BitVec<u64> =
                         BitVec::with_capacity(MAX_SINGLE_PACKET_PAYLOAD_LENGTH);
-                    let message: &Box<dyn Message> =
-                        &self.message_buffer[client.1.message_buffer_position];
-                    packet.extend(message.get_message_type().view_bits::<Lsb0>());
-                    packet.extend(message.encode_message());
+                    let message = &self.message_buffer[client.1.message_buffer_position];
+                    packet.extend(message);
                     if (client.1.remaining_bandwidth as i64 - packet.len() as i64) < 0 {
                         break 'outer;
                     }
@@ -297,35 +267,28 @@ pub impl NetNodeServer {
         let new_players = self.server_networker.poll();
         if !new_players.is_empty() {
             for player in new_players {
-                self.incoming_message_buffer
-                    .push_back(Box::new(PlayerJoin { player: player }));
+                godot_warn!("new player");
+                self.signals().player_joined().emit(player);
             }
         }
-        let networker = &mut self.server_networker;
         // check for and handle disconnected clients
         loop {
             let mut dc_client: Option<ClientIndex> = None;
-            for client in networker.clients.iter() {
-                if networker.server.client_id(*client.0).is_none() {
-                    self.message_buffer.push_back(Box::new(PlayerDc {
-                        player: client.1.id,
-                    }));
-                    for node in self.networked_nodes.iter_mut() {
-                        if node.bind().owner_id == client.1.id {
-                            node.bind_mut().on_owner_dc();
-                            node.bind_mut().owner_id = 0;
-                        }
-                    }
+            for client in self.server_networker.clients.iter() {
+                if self.server_networker.server.client_id(*client.0).is_none() {
                     dc_client = Some(client.0.clone());
+                    let id = client.1.id;
+                    self.signals().player_left().emit(id);
                     break;
                 }
             }
             if dc_client.is_some() {
-                networker.clients.remove(&dc_client.unwrap());
+                self.server_networker.clients.remove(&dc_client.unwrap());
             } else {
                 break;
             }
         }
+        let networker = &mut self.server_networker;
         let mut current_frame_hit_rates: HashMap<ClientIndex, u64> =
             HashMap::from_iter(networker.clients.iter().map(|x| (*x.0, 0)));
         let mut current_frame_miss_rates: HashMap<ClientIndex, u64> =
@@ -420,23 +383,19 @@ pub impl NetNodeServer {
                 3 => {
                     if packet_number == client.next_c3_packet_number {
                         client.next_c3_packet_number += 1;
-                        let message_type: u8 = packet[pointer..pointer + BYTE].load_le();
-                        pointer += BYTE;
-                        let mut message: Box<dyn Message>;
-                        match message_type {
-                            0 => message = Box::new(NetworkObjectCreation::default()),
-                            1 => message = Box::new(PlayerPhysicsGrab::default()),
-                            2 => message = Box::new(PlayerPhysicsRelease::default()),
-                            3 => message = Box::new(ChatBoxMessageSent::default()),
-                            5 => message = Box::new(PlayerAvatarChange::default()),
-                            7 => message = Box::new(ChangeObjectOwnership::default()),
-                            8 => message = Box::new(PlayerInteract::default()),
-                            _ => panic!("got unhandled message type {:#?}", message_type),
+                        self.message_buffer.push_back(packet[pointer..].to_bitvec());
+                        let message_type: u16 = packet[pointer..pointer + BYTES2].load_le();
+                        pointer += BYTES2;
+                        if let Some(handler) = self.message_handlers.get_mut(&message_type) {
+                            handler
+                                .bind_mut()
+                                .handle_message(packet.as_bitslice(), &mut pointer);
+                        } else {
+                            godot_warn!(
+                                "received unhandled message with type: {:#?}",
+                                message_type
+                            );
                         }
-                        message.decode_message(&mut pointer, packet.as_bitslice());
-                        self.message_buffer
-                            .push_back(dyn_clone::clone_box(&*message));
-                        self.incoming_message_buffer.push_back(message);
                         // since the next packet might of been buffered to wait for this one, we go through the buffer and check each packet
                         // easy optimisation would be storing the packet number and keeping the vec sorted so we only check once
                         let mut index: usize = 0;
@@ -446,31 +405,28 @@ pub impl NetNodeServer {
                                 break;
                             }
                             let packet = packet.unwrap();
-                            if packet.len() < PACKET_HEADER_SIZE + BYTES8 {
+                            if packet.len() < PACKET_HEADER_SIZE {
                                 break;
                             }
-                            let mut pointer: usize = PACKET_HEADER_SIZE;
+                            let mut pointer: usize = BYTES2;
                             let packet_number: u64 = packet[pointer..pointer + BYTES8].load_le();
                             pointer += BYTES8;
                             if packet_number == client.next_c3_packet_number {
                                 client.next_c3_packet_number += 1;
-                                let message_type: u8 = packet[pointer..pointer + BYTE].load_le();
-                                pointer += BYTE;
-                                let mut message: Box<dyn Message>;
-                                match message_type {
-                                    0 => message = Box::new(NetworkObjectCreation::default()),
-                                    1 => message = Box::new(PlayerPhysicsGrab::default()),
-                                    2 => message = Box::new(PlayerPhysicsRelease::default()),
-                                    3 => message = Box::new(ChatBoxMessageSent::default()),
-                                    5 => message = Box::new(PlayerAvatarChange::default()),
-                                    7 => message = Box::new(ChangeObjectOwnership::default()),
-                                    8 => message = Box::new(PlayerInteract::default()),
-                                    _ => panic!("got unhandled message type {:#?}", message_type),
+                                self.message_buffer.push_back(packet[pointer..].to_bitvec());
+                                let message_type: u16 = packet[pointer..pointer + BYTES2].load_le();
+                                pointer += BYTES2;
+                                if let Some(handler) = self.message_handlers.get_mut(&message_type)
+                                {
+                                    handler
+                                        .bind_mut()
+                                        .handle_message(packet.as_bitslice(), &mut pointer);
+                                } else {
+                                    godot_warn!(
+                                        "received unhandled message with type: {:#?}",
+                                        message_type
+                                    );
                                 }
-                                message.decode_message(&mut pointer, packet.as_bitslice());
-                                self.message_buffer
-                                    .push_back(dyn_clone::clone_box(&*message));
-                                self.incoming_message_buffer.push_back(message);
                                 client.c3_buffered_packets.swap_remove(index);
                                 index = 0;
                             } else {
@@ -728,23 +684,6 @@ impl INode for NetNodeServer {
         self.update_network_nodes();
         self.process_voice_input();
         self.send_packets_server();
-
-        // handle ownership events
-        if self.has_message() && self.get_message_type() == 7 {
-            let objectid: u16 = self
-                .peek_message()
-                .as_any()
-                .downcast_ref::<ChangeObjectOwnership>()
-                .unwrap()
-                .objectid;
-            self.networked_nodes
-                .iter_mut()
-                .find(|x| x.bind().objectid == objectid)
-                .unwrap()
-                .bind_mut()
-                .owner_id = self.get_message_player();
-            self.pop_message();
-        }
     }
 }
 
@@ -875,6 +814,7 @@ impl ServerNetworker {
                     .unwrap()
                     .last_packet_send_time = Instant::now();
             } else {
+                godot_warn!("new player packet");
                 self.next_client_id += 1;
                 self.clients.insert(
                     packet.1,

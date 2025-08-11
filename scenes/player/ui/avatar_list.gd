@@ -28,4 +28,5 @@ func change_avatar(avatar:int) -> void:
 	selected_avatar = avatar
 
 func equip_avatar() -> void:
-	(NetworkManager as NetNodeManager).change_avatar(selected_avatar)
+	var avatar_handler:AvatarChangeHandler = GlobalWorldAccess.current_world.avatar_change_handler
+	avatar_handler.send_message((NetworkManager as NetNodeManager).get_id(), selected_avatar)

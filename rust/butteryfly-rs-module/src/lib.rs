@@ -5,10 +5,12 @@ mod net_nodes;
 mod serializer;
 mod server;
 mod voice;
+
 use crate::client::*;
+use crate::messages::MessageHandler;
 use crate::net_nodes::*;
 use crate::server::*;
-
+use bitvec::prelude::*;
 use godot::prelude::*;
 
 struct MyExtension;
@@ -21,6 +23,7 @@ unsafe impl ExtensionLibrary for MyExtension {}
 struct NetNodeManager {
     client: Option<Gd<NetNodeClient>>,
     server: Option<Gd<NetNodeServer>>,
+    is_server: bool,
     base: Base<Node>,
 }
 
@@ -69,6 +72,19 @@ impl NetNodeManager {
         }
     }
     #[func]
+    fn get_next_object_id(&mut self) -> u16 {
+        if self.server.is_some() {
+            return self
+                .server
+                .as_mut()
+                .unwrap()
+                .bind_mut()
+                .get_next_object_id();
+        } else {
+            panic!("called get_next_object_id but we are not a server");
+        }
+    }
+    #[func]
     fn start_client(&mut self, arr: PackedByteArray) {
         let c = NetNodeClient::new_alloc();
         self.base_mut().add_child(&c);
@@ -80,14 +96,29 @@ impl NetNodeManager {
         let s = NetNodeServer::new_alloc();
         self.base_mut().add_child(&s);
         self.server = Some(s);
+        let selfref = self.to_gd();
+        self.server
+            .as_mut()
+            .unwrap()
+            .signals()
+            .player_joined()
+            .connect_other(&selfref, NetNodeManager::propogate_player_joined);
+        self.server
+            .as_mut()
+            .unwrap()
+            .signals()
+            .player_left()
+            .connect_other(&selfref, NetNodeManager::propogate_player_left);
         self.server
             .as_mut()
             .unwrap()
             .bind_mut()
             .start_server(bind_addr, private_key);
+        self.is_server = true;
     }
     #[func]
     fn stop(&mut self) {
+        self.is_server = false;
         if self.client.is_some() {
             self.client
                 .as_mut()
@@ -135,190 +166,8 @@ impl NetNodeManager {
         return true;
     }
     #[func]
-    fn network_grab(&mut self, target: Gd<Node>) {
-        if self.client.is_some() {
-            self.client
-                .as_mut()
-                .unwrap()
-                .bind_mut()
-                .network_grab(target);
-        } else {
-            godot_warn!("tried to network_grab but we are not a client")
-        }
-    }
-    #[func]
-    fn network_release(&mut self) {
-        if self.client.is_some() {
-            self.client.as_mut().unwrap().bind_mut().network_release();
-        } else {
-            godot_warn!("tried to network_grab but we are not a client")
-        }
-    }
-    #[func]
-    fn network_message_send(&mut self, message: String) {
-        if self.client.is_some() {
-            self.client
-                .as_mut()
-                .unwrap()
-                .bind_mut()
-                .network_message_send(message);
-        } else {
-            godot_warn!("tried to network_message_send but we are not a client")
-        }
-    }
-    #[func]
-    fn change_avatar(&mut self, avatar: u64) {
-        if self.client.is_some() {
-            self.client
-                .as_mut()
-                .unwrap()
-                .bind_mut()
-                .change_avatar(avatar);
-        } else {
-            godot_warn!("tried to change_avatar but we are not a client")
-        }
-    }
-    #[func]
-    fn change_object_owner(&mut self, objectid: u16, player: u16) {
-        if self.client.is_some() {
-            self.client
-                .as_mut()
-                .unwrap()
-                .bind_mut()
-                .change_object_ownership(objectid, player);
-        } else if self.server.is_some() {
-            self.server
-                .as_mut()
-                .unwrap()
-                .bind_mut()
-                .change_object_ownership(objectid, player);
-        } else {
-            godot_warn!("tried to change_object_owner but we are not a client or server")
-        }
-    }
-    #[func]
-    fn become_object_owner(&mut self, objectid: u16) {
-        if self.client.is_some() {
-            let id: u16 = self.client.as_ref().unwrap().bind().get_id();
-            self.client
-                .as_mut()
-                .unwrap()
-                .bind_mut()
-                .change_object_ownership(objectid, id);
-        } else if self.server.is_some() {
-            let id: u16 = self.server.as_ref().unwrap().bind().get_id();
-            self.server
-                .as_mut()
-                .unwrap()
-                .bind_mut()
-                .change_object_ownership(objectid, id);
-        } else {
-            godot_warn!("tried to become_object_owner but we are not a client or server")
-        }
-    }
-    #[func]
-    fn release_object_owner(&mut self, objectid: u16) {
-        if self.client.is_some() {
-            self.client
-                .as_mut()
-                .unwrap()
-                .bind_mut()
-                .change_object_ownership(objectid, 0);
-        } else if self.server.is_some() {
-            self.server
-                .as_mut()
-                .unwrap()
-                .bind_mut()
-                .change_object_ownership(objectid, 0);
-        } else {
-            godot_warn!("tried to release_object_owner but we are not a client or server")
-        }
-    }
-
-    #[func]
-    fn trigger_interaction(
-        &mut self,
-        player: u16,
-        interaction_type: u8,
-        interactable_path: String,
-    ) {
-        if self.client.is_some() {
-            self.client
-                .as_mut()
-                .unwrap()
-                .bind_mut()
-                .trigger_interaction(player, interaction_type, interactable_path);
-        } else if self.server.is_some() {
-            self.server
-                .as_mut()
-                .unwrap()
-                .bind_mut()
-                .trigger_interaction(player, interaction_type, interactable_path);
-        } else {
-            godot_warn!("tried to trigger_interaction but we are not a client or server")
-        }
-    }
-    #[func]
-    fn peek_message(&mut self) -> VariantArray {
-        if self.client.is_some() {
-            let c = self.client.as_mut().unwrap().bind_mut();
-            return c.peek_message().get_message_contents();
-        } else if self.server.is_some() {
-            let s = self.server.as_mut().unwrap().bind_mut();
-            return s.peek_message().get_message_contents();
-        } else {
-            panic!("called peek_message but no client or server is running");
-        }
-    }
-    #[func]
-    fn pop_message(&mut self) {
-        if self.client.is_some() {
-            self.client.as_mut().unwrap().bind_mut().pop_message();
-        } else if self.server.is_some() {
-            self.server.as_mut().unwrap().bind_mut().pop_message();
-        } else {
-            godot_warn!("called pop_message but no client or server is running");
-        }
-    }
-    #[func]
-    fn has_message(&mut self) -> bool {
-        if self.client.is_some() {
-            return self.client.as_mut().unwrap().bind_mut().has_message();
-        } else if self.server.is_some() {
-            return self.server.as_mut().unwrap().bind_mut().has_message();
-        } else {
-            panic!("called peek_message but no client or server is running");
-        }
-    }
-    #[func]
-    fn get_message_type(&mut self) -> u8 {
-        if self.client.is_some() {
-            return self.client.as_mut().unwrap().bind_mut().get_message_type();
-        } else if self.server.is_some() {
-            return self.server.as_mut().unwrap().bind_mut().get_message_type();
-        } else {
-            panic!("called peek_message but no client or server is running");
-        }
-    }
-    #[func]
-    fn get_message_player(&mut self) -> u16 {
-        if self.client.is_some() {
-            return self
-                .client
-                .as_mut()
-                .unwrap()
-                .bind_mut()
-                .get_message_player();
-        } else if self.server.is_some() {
-            return self
-                .server
-                .as_mut()
-                .unwrap()
-                .bind_mut()
-                .get_message_player();
-        } else {
-            panic!("called peek_message but no client or server is running");
-        }
+    pub fn is_server(&self) -> bool {
+        self.is_server
     }
     #[func]
     fn get_networked_nodes(&self) -> Vec<Gd<NetworkedNode>> {
@@ -363,4 +212,70 @@ impl NetNodeManager {
             panic!("tried to register_player_object but we are not a server");
         }
     }
+    fn register_message_handler(&mut self, handler: Gd<MessageHandler>, message_type: u16) {
+        if self.client.is_some() {
+            return self
+                .client
+                .as_mut()
+                .unwrap()
+                .bind_mut()
+                .register_message(handler, message_type);
+        } else if self.server.is_some() {
+            return self
+                .server
+                .as_mut()
+                .unwrap()
+                .bind_mut()
+                .register_message(handler, message_type);
+        } else {
+            panic!("tried to register_message_handler but no client or server is running");
+        }
+    }
+    fn unregister_message_handler(&mut self, message_type: u16) {
+        if self.client.is_some() {
+            return self
+                .client
+                .as_mut()
+                .unwrap()
+                .bind_mut()
+                .unregister_message(message_type);
+        } else if self.server.is_some() {
+            return self
+                .server
+                .as_mut()
+                .unwrap()
+                .bind_mut()
+                .unregister_message(message_type);
+        } else {
+            panic!("tried to unregister_message_handler but no client or server is running");
+        }
+    }
+    fn queue_message(&mut self, message: BitVec<u64, Lsb0>) {
+        if self.client.is_some() {
+            self.client
+                .as_mut()
+                .unwrap()
+                .bind_mut()
+                .queue_message(message);
+        } else if self.server.is_some() {
+            self.server
+                .as_mut()
+                .unwrap()
+                .bind_mut()
+                .queue_message(message);
+        } else {
+            godot_warn!("tried to queue_message but no client or server is running");
+        }
+    }
+    fn propogate_player_joined(&mut self, player: u16) {
+        godot_warn!("new player propogated");
+        self.signals().player_joined().emit(player);
+    }
+    fn propogate_player_left(&mut self, player: u16) {
+        self.signals().player_left().emit(player);
+    }
+    #[signal]
+    pub fn player_joined(player: u16);
+    #[signal]
+    pub fn player_left(player: u16);
 }
