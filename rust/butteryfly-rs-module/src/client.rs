@@ -37,7 +37,7 @@ pub struct NetNodeClient {
     c1_miss_rates_last_frames: VecDeque<u64>,
     c1_hit_rates_last_frames: VecDeque<u64>,
     next_c3_packet_number: u64,
-    c3_buffered_packets: Vec<BitVec<u64, Lsb0>>,
+    c3_buffered_packets: HashMap<u64, BitVec<u64, Lsb0>>,
     c0_seen_packets: HashSet<u64>,
     remaining_bandwidth: usize,
     voice_manager: voice::VoiceStreamManager,
@@ -272,8 +272,12 @@ pub impl NetNodeClient {
                 }
                 // handles reliable, ordered messages from the server or other clients called messages
                 3 => {
-                    if packet_number == self.next_c3_packet_number {
+                    self.c3_buffered_packets.insert(packet_number, packet);
+                    while let Some(packet) =
+                        self.c3_buffered_packets.remove(&self.next_c3_packet_number)
+                    {
                         self.next_c3_packet_number += 1;
+                        let mut pointer: usize = BYTES2 + BYTES8;
                         let message_type: u16 = packet[pointer..pointer + BYTES2].load_le();
                         pointer += BYTES2;
                         let root = self
@@ -298,44 +302,6 @@ pub impl NetNodeClient {
                                 message_type
                             );
                         }
-                        // since the next packet might of been buffered to wait for this one, we go through the buffer and check each packet
-                        // easy optimisation would be storing the packet number and keeping the vec sorted so we only check once
-                        let mut index: usize = 0;
-                        loop {
-                            let packet = self.c3_buffered_packets.get(index);
-                            if packet.is_none() {
-                                break;
-                            }
-                            let packet = packet.unwrap();
-                            if packet.len() < PACKET_HEADER_SIZE {
-                                break;
-                            }
-                            let mut pointer: usize = BYTES2;
-                            let packet_number: u64 = packet[pointer..pointer + BYTES8].load_le();
-                            pointer += BYTES8;
-                            if packet_number == self.next_c3_packet_number {
-                                self.next_c3_packet_number += 1;
-                                let message_type: u16 = packet[pointer..pointer + BYTES2].load_le();
-                                pointer += BYTES2;
-                                if let Some(handler) = self.message_handlers.get_mut(&message_type)
-                                {
-                                    handler
-                                        .bind_mut()
-                                        .handle_message(packet.as_bitslice(), &mut pointer);
-                                } else {
-                                    godot_warn!(
-                                        "received unhandled message with type: {:#?}",
-                                        message_type
-                                    );
-                                }
-                                self.c3_buffered_packets.swap_remove(index);
-                                index = 0;
-                            } else {
-                                index += 1;
-                            }
-                        }
-                    } else {
-                        self.c3_buffered_packets.push(packet);
                     }
                 }
                 5 => {
@@ -530,7 +496,7 @@ pub struct ClientNetworker {
     packet_number_c5: u64,
     c4_remaining_packet_chunks: u64,
     c4_packet_chunks: Vec<Vec<u8>>,
-    c4_waiting_packets: Vec<Vec<u8>>,
+    c4_waiting_packets: HashMap<u64, Vec<u8>>,
     next_c4_packet_number: u64,
     packet_buffer: Vec<BitVec<u64, Lsb0>>,
     pub state: ClientState,
@@ -551,7 +517,7 @@ impl Default for ClientNetworker {
             packet_number_c5: 0,
             c4_remaining_packet_chunks: 0,
             c4_packet_chunks: Vec::new(),
-            c4_waiting_packets: Vec::new(),
+            c4_waiting_packets: HashMap::new(),
             next_c4_packet_number: 0,
             packet_buffer: Vec::new(),
             state: ClientState::AwaitingID,
@@ -680,7 +646,9 @@ impl ClientNetworker {
             self.waiting_acks.insert((channel, packet_number));
 
             if channel == 4 {
-                if packet_number == self.next_c4_packet_number {
+                self.c4_waiting_packets.insert(packet_number, packet);
+                while let Some(packet) = self.c4_waiting_packets.remove(&self.next_c4_packet_number)
+                {
                     self.next_c4_packet_number += 1;
                     if self.c4_remaining_packet_chunks == 0 {
                         self.c4_remaining_packet_chunks = u64::from_le_bytes([
@@ -727,75 +695,6 @@ impl ClientNetworker {
                             }
                             self.packet_buffer.push(packet_bits);
                         }
-                    }
-                } else {
-                    self.c4_waiting_packets.push(packet);
-                }
-                let mut idx: usize = 0;
-                loop {
-                    let packet = self.c4_waiting_packets.get(idx);
-                    if packet.is_none() {
-                        break;
-                    }
-                    let packet = packet.unwrap();
-                    let packet_number: u64 = u64::from_le_bytes([
-                        packet[2], packet[3], packet[4], packet[5], packet[6], packet[7],
-                        packet[8], packet[9],
-                    ]);
-                    if packet_number == self.next_c4_packet_number {
-                        self.next_c4_packet_number += 1;
-                        idx = 0;
-                        if self.c4_remaining_packet_chunks == 0 {
-                            self.c4_remaining_packet_chunks = u64::from_le_bytes([
-                                packet[10], packet[11], packet[12], packet[13], packet[14],
-                                packet[15], packet[16], packet[17],
-                            ]);
-                        } else {
-                            self.c4_packet_chunks
-                                .push(self.c4_waiting_packets.swap_remove(idx));
-                            self.c4_remaining_packet_chunks -= 1;
-                            if self.c4_remaining_packet_chunks == 0 {
-                                let mut packet: Vec<u8> = Vec::with_capacity(
-                                    self.c4_packet_chunks.iter().map(|x| x.len()).sum(),
-                                );
-                                for chunk in self.c4_packet_chunks.iter() {
-                                    packet.extend(chunk[10..].iter());
-                                }
-                                self.c4_packet_chunks.clear();
-                                let channel: u16 = u16::from_le_bytes([packet[0], packet[1]]);
-                                if channel == CHANNEL_ACK {
-                                    let mut pointer: usize = PACKET_HEADER_SIZE_ACK / BYTE;
-                                    while pointer + ((BYTES8 + BYTES2) / BYTE) <= packet.len() {
-                                        let packet_channel = u16::from_le_bytes([
-                                            packet[pointer],
-                                            packet[pointer + 1],
-                                        ]);
-                                        pointer += BYTES2 / BYTE;
-                                        let packet_num = u64::from_le_bytes([
-                                            packet[pointer],
-                                            packet[pointer + 1],
-                                            packet[pointer + 2],
-                                            packet[pointer + 3],
-                                            packet[pointer + 4],
-                                            packet[pointer + 5],
-                                            packet[pointer + 6],
-                                            packet[pointer + 7],
-                                        ]);
-                                        pointer += 8;
-                                        self.reliable_packets.remove(&(packet_channel, packet_num));
-                                    }
-                                    continue;
-                                }
-                                let mut packet_bits: BitVec<u64, Lsb0> =
-                                    BitVec::with_capacity(packet.len() * 8);
-                                for byte in packet {
-                                    packet_bits.extend(byte.view_bits::<Lsb0>());
-                                }
-                                self.packet_buffer.push(packet_bits);
-                            }
-                        }
-                    } else {
-                        idx += 1;
                     }
                 }
                 continue;

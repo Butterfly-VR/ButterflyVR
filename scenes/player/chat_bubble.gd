@@ -9,7 +9,11 @@ func _ready() -> void:
 func on_message(message:ChatBoxManager.Message) -> void:
 	@warning_ignore("unsafe_property_access")
 	if message.player == get_parent().id:
-		text = message.text
+		var contents = message.text
+		if contents.length() > 203:
+			contents = contents.left(200)
+			contents += "..."
+		text = contents
 		transparency = 0
 		await get_tree().create_timer(3).timeout
 		fading = true
