@@ -1,7 +1,7 @@
 // serialization functions for networkednode values
 use bitvec::prelude::*;
 use godot::prelude::*;
-use std::borrow::Cow;
+use std::{borrow::Cow, i64};
 
 const BYTE: usize = 8;
 const BYTES2: usize = 16;
@@ -10,6 +10,7 @@ const BYTES8: usize = 64;
 // all possible ways a value can be encoded for the network
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub enum NetworkedValueTypes {
+    Nil,
     Bool,
     Unsigned8,
     Unsigned16,
@@ -23,6 +24,7 @@ impl TryFrom<i64> for NetworkedValueTypes {
     type Error = Cow<'static, str>;
     fn try_from(value: i64) -> Result<Self, Self::Error> {
         match value {
+            -2 => Ok(NetworkedValueTypes::Nil),
             -1 => Err(Cow::Borrowed("invalid type")),
             0 => Ok(NetworkedValueTypes::Bool),
             1 => Ok(NetworkedValueTypes::Unsigned8),
@@ -45,6 +47,7 @@ pub fn decode_with_known_type(
     object_type: &NetworkedValueTypes,
 ) -> Option<Variant> {
     match object_type {
+        NetworkedValueTypes::Nil => Some(Variant::nil()),
         NetworkedValueTypes::Bool => {
             if *pointer + 1 > data.len() {
                 return None;
@@ -173,6 +176,7 @@ pub fn encode_with_known_type(
     object_type: &NetworkedValueTypes,
 ) -> BitVec<u64, Lsb0> {
     match object_type {
+        NetworkedValueTypes::Nil => BitVec::new(),
         NetworkedValueTypes::Bool => {
             let value: bool = bool::from_variant(object);
             let mut bitvec = BitVec::with_capacity(1);
