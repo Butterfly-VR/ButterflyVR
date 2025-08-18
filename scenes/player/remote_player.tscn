@@ -1,28 +1,22 @@
-[gd_scene load_steps=6 format=3 uid="uid://dv34xwvl07l7v"]
+[gd_scene load_steps=5 format=3 uid="uid://dv34xwvl07l7v"]
 
-[ext_resource type="Script" uid="uid://88pj5ey65hqv" path="res://scenes/player/movement_networker.gd" id="1_8xldn"]
+[ext_resource type="Script" uid="uid://f1qkre3h8u0i" path="res://scenes/player/player_access.gd" id="1_rmxnb"]
 [ext_resource type="Script" uid="uid://by7wacrsb7mud" path="res://scenes/player/remote_grabber.gd" id="2_2ms3h"]
-[ext_resource type="PackedScene" uid="uid://le13if4v6qpc" path="res://scenes/player/avatars/built in avatars/cubefella/cube_fella.tscn" id="3_rmxnb"]
-[ext_resource type="Script" uid="uid://dgh52eivd3tq4" path="res://scenes/player/avatar_manager.gd" id="4_840kl"]
+[ext_resource type="Script" uid="uid://d287rq0d3v2ec" path="res://scenes/player/pivot_center.gd" id="2_840kl"]
 [ext_resource type="PackedScene" uid="uid://fqt8aa660pk8" path="res://scenes/player/name_plate.tscn" id="5_qn18y"]
 
 [node name="RemotePlayer" type="Node3D"]
+script = ExtResource("1_rmxnb")
 
-[node name="MovementNetworker" type="Node" parent="."]
-script = ExtResource("1_8xldn")
-
-[node name="PivotCenter" type="Node3D" parent="."]
+[node name="PivotCenter" type="Node3D" parent="." node_paths=PackedStringArray("player_access")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+script = ExtResource("2_840kl")
+player_access = NodePath("..")
 
-[node name="RemoteGrabber" type="Node3D" parent="PivotCenter"]
+[node name="RemoteGrabber" type="Node3D" parent="PivotCenter" node_paths=PackedStringArray("player_access")]
 script = ExtResource("2_2ms3h")
+player_access = NodePath("../..")
 
-[node name="CubeFella" parent="." instance=ExtResource("3_rmxnb")]
-transform = Transform3D(-1.8, 0, -2.71792e-07, 0, 1.8, 0, 2.71792e-07, 0, -1.8, 0, -1.175, 0)
-
-[node name="AvatarManager" type="Node" parent="." node_paths=PackedStringArray("equiped_avatar") groups=["RemoteAvatarManagers"]]
-script = ExtResource("4_840kl")
-equiped_avatar = NodePath("../CubeFella")
-
-[node name="NamePlate" parent="." instance=ExtResource("5_qn18y")]
+[node name="NamePlate" parent="." node_paths=PackedStringArray("player_access") instance=ExtResource("5_qn18y")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+player_access = NodePath("..")

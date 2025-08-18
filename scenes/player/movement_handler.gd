@@ -1,6 +1,7 @@
 extends Node
 
-@onready var target:MovementHandler = get_parent().get_parent()
+@export var player_access:PlayerAccess
+@onready var target:MovementHandler = player_access.player
 var is_moving_forwards:bool = false
 var is_moving_backwards:bool = false
 var is_moving_left:bool = false

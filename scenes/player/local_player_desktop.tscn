@@ -1,0 +1,25 @@
+[gd_scene load_steps=7 format=3 uid="uid://bayuo5pqfter5"]
+
+[ext_resource type="PackedScene" uid="uid://de6hhgtdqpb24" path="res://scenes/player/camera.tscn" id="1_76yq6"]
+[ext_resource type="Script" uid="uid://f1qkre3h8u0i" path="res://scenes/player/player_access.gd" id="1_yag7k"]
+[ext_resource type="Script" uid="uid://c5h1k5wjju5fk" path="res://scenes/player/movement_handler.gd" id="2_4c4oc"]
+[ext_resource type="PackedScene" uid="uid://dv5d7diocohlq" path="res://scenes/player/ui/ui_root.tscn" id="2_t54nr"]
+[ext_resource type="PackedScene" uid="uid://cxa5mj38qp8iu" path="res://scenes/player/audio_handler.tscn" id="3_oaug5"]
+[ext_resource type="PackedScene" uid="uid://cyw6fgjshkt2r" path="res://scenes/player/raycaster.tscn" id="3_yag7k"]
+
+[node name="LocalPlayerDesktop" type="Node3D" groups=["LocalPlayer"]]
+script = ExtResource("1_yag7k")
+
+[node name="Camera3D" parent="." node_paths=PackedStringArray("player_access") instance=ExtResource("1_76yq6")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+player_access = NodePath("..")
+
+[node name="UIRoot" parent="Camera3D" instance=ExtResource("2_t54nr")]
+
+[node name="Raycaster" parent="Camera3D" instance=ExtResource("3_yag7k")]
+
+[node name="MovementHandler" type="Node" parent="." node_paths=PackedStringArray("player_access")]
+script = ExtResource("2_4c4oc")
+player_access = NodePath("..")
+
+[node name="AudioHandler" parent="." instance=ExtResource("3_oaug5")]

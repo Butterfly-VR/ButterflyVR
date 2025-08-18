@@ -64,7 +64,5 @@ func setup_avatar(root:Node) -> Node:
 			var ik:GodotIK = preload("res://scenes/player/avatars/godot_ik.tscn").instantiate()
 			var bones:Dictionary = node.get_meta("IKMarker")
 			# todo: check marker is valid
-			@warning_ignore("unsafe_method_access")
-			ik.setup(bones["head_bone"], bones["left_arm_bone"], bones["right_arm_bone"], bones["left_leg_bone"], bones["right_leg_bone"])
 			node.add_child(ik)
 	return root

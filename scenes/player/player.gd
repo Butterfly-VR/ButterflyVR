@@ -19,8 +19,9 @@ const CROUCHED_CAMERA_HEIGHT:float = 0.3
 @export var networker:PlayerNetworker
 
 var gravity:float = ProjectSettings.get_setting("physics/3d/default_gravity")
-var camera:Camera3D
-var remote:Node3D
+var head:Node3D
+var player:PlayerAccess
+var is_local:bool
 
 var should_jump:bool
 var player_state:Player_states = Player_states.NONE
@@ -28,22 +29,20 @@ var input_dir:Vector2
 var cam_x_rotation:float
 
 func init_local() -> void:
-	var local_player:Node = preload("res://scenes/player/local_player.tscn").instantiate()
-	add_child.call_deferred(local_player)
+	is_local = true
+	player = preload("res://scenes/player/local_player_desktop.tscn").instantiate()
+	player.player = self
+	player.networker = networker
+	add_child.call_deferred(player)
 
 func init_remote() -> void:
-	var remote_player:Node = preload("res://scenes/player/remote_player.tscn").instantiate()
-	add_child.call_deferred(remote_player)
+	is_local = false
+	player = preload("res://scenes/player/remote_player.tscn").instantiate()
+	player.player = self
+	player.networker = networker
+	add_child.call_deferred(player)
 
 func _physics_process(delta:float) -> void:
-	if camera == null:
-		if remote == null:
-			return
-		if player_state == Player_states.CROUCHED:
-			remote.position.y = lerp(remote.position.y, CROUCHED_CAMERA_HEIGHT, 0.05)
-		else:
-			remote.position.y = lerp(remote.position.y, DEFAULT_CAMERA_HEIGHT, 0.05)
-		return
 	var modified_speed:float = SPEED
 	var modified_max_speed:float = MAX_SPEED
 	var modified_jump_velocity:float = JUMP_VELOCITY
@@ -56,11 +55,11 @@ func _physics_process(delta:float) -> void:
 			modified_max_speed = modified_max_speed * CROUCH_SPEED_MULT
 			modified_speed = modified_speed * CROUCH_SPEED_MULT
 			modified_jump_velocity = modified_jump_velocity * CROUCH_JUMP_MULT
-	
-	if player_state == Player_states.CROUCHED:
-		camera.position.y = lerp(camera.position.y, CROUCHED_CAMERA_HEIGHT, 0.05)
-	else:
-		camera.position.y = lerp(camera.position.y, DEFAULT_CAMERA_HEIGHT, 0.05)
+	if head:
+		if player_state == Player_states.CROUCHED:
+			head.position.y = lerp(head.position.y, CROUCHED_CAMERA_HEIGHT, 0.05)
+		else:
+			head.position.y = lerp(head.position.y, DEFAULT_CAMERA_HEIGHT, 0.05)
 	
 	if not is_on_floor():
 		velocity.y -= gravity * delta

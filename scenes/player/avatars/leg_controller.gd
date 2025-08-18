@@ -25,7 +25,7 @@ var leg2_target_base_position:Vector3
 
 var rising_height_progress:float = 0.0
 
-@onready var target:Node3D = get_parent().get_parent().get_parent()
+@onready var target:Node3D = get_parent().get_parent()
 var last_target_position:Vector3
 
 enum cycle_states{

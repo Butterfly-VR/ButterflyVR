@@ -5,7 +5,9 @@ class_name DesktopCamera
 const VERTICAL_LIMIT_MAX:float = 1.5707
 const VERTICAL_LIMIT_MIN:float = -1.5707
 
-@onready var rotateTarget:MovementHandler # the node the camera should rotate when turning left or right
+@export var player_access:PlayerAccess
+
+var rotateTarget:MovementHandler # the node the camera should rotate when turning left or right
 # future proofing for when these become changable settings
 var sensitivity:float = 0.0005
 var verticalSensitivityMultiplier:float = 0.75
@@ -13,10 +15,10 @@ var verticalSensitivityMultiplier:float = 0.75
 @onready var verticalSensitivity:float = sensitivity * verticalSensitivityMultiplier
 
 func _ready() -> void:
-	rotateTarget = get_parent().get_parent()
+	rotateTarget = player_access.player
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	@warning_ignore("unsafe_property_access")
-	get_parent().get_parent().camera = self
+	player_access.player.head = self
 
 func _unhandled_input(event:InputEvent) -> void:
 	if event is InputEventMouseMotion and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED:

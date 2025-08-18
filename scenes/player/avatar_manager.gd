@@ -2,21 +2,25 @@ extends Node
 
 signal avatar_loaded
 
-@export var equiped_avatar:Node3D
-@onready var default_transform:Transform3D = equiped_avatar.transform
-var networker:PlayerNetworker
+@export var networker:PlayerNetworker
+@export var player:MovementHandler
+var default_transform:Transform3D = Transform3D(Basis.FLIP_Z.scaled(Vector3(1.8, 1.8, 1.8)), Vector3(0, -1.17, 0))
+var owner_id:int
+var equiped_avatar:Node3D
 var current_avatar:int
 var new_avatar:PackedScene
 
 func _ready() -> void:
 	@warning_ignore("unsafe_property_access")
-	networker = get_parent().get_parent().networker
-	if equiped_avatar:
-		setup_avatar(equiped_avatar)
+	owner_id = networker.owner_id
 	GlobalWorldAccess.current_world.avatar_change_handler.avatar_changed.connect(change_avatar)
+	while !(NetworkManager as NetNodeManager).id_ready():
+		await get_tree().physics_frame
+	if owner_id == (NetworkManager as NetNodeManager).get_id():
+		GlobalWorldAccess.current_world.avatar_change_handler.send_message(owner_id, 0)
 
-func change_avatar(player:int, avatar:int) -> void:
-	if player != networker.owner_id:
+func change_avatar(target_player:int, avatar:int) -> void:
+	if target_player != owner_id:
 		return
 	if equiped_avatar != null:
 		equiped_avatar.queue_free()
@@ -34,7 +38,8 @@ func change_avatar(player:int, avatar:int) -> void:
 		await avatar_loaded
 		thread.wait_to_finish()
 	current_avatar = avatar
-	equiped_avatar.queue_free()
+	if equiped_avatar:
+		equiped_avatar.queue_free()
 	await get_tree().physics_frame # dont have both avatars loaded at the same time
 	equiped_avatar = setup_avatar(new_avatar.instantiate())
 	get_parent().add_child(equiped_avatar)
@@ -82,6 +87,6 @@ func setup_avatar(root:Node) -> Node:
 			var bones:Dictionary = node.get_meta("IKMarker")
 			# todo: check marker is valid
 			@warning_ignore("unsafe_method_access")
-			ik.setup(bones["head_bone"], bones["left_arm_bone"], bones["right_arm_bone"], bones["left_leg_bone"], bones["right_leg_bone"])
+			ik.setup(bones["head_bone"], bones["left_arm_bone"], bones["right_arm_bone"], bones["left_leg_bone"], bones["right_leg_bone"], player.is_local, player.head)
 			node.add_child(ik)
 	return root

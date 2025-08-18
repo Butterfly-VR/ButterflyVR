@@ -8,9 +8,7 @@ func _ready() -> void:
 		await get_tree().physics_frame
 	if owner_id == (NetworkManager as NetNodeManager).get_id():
 		target.init_local()
-	else:
-		target.init_remote()
-	if (NetworkManager as NetNodeManager).get_id() == 0:
+	if (NetworkManager as NetNodeManager).is_server():
 		(NetworkManager as NetNodeManager).register_player_object(owner_id, target)
 
 func _get_networked_values() -> Array:
