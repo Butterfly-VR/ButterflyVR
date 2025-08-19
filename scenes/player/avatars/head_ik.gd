@@ -9,5 +9,5 @@ func _ready() -> void:
 
 func _physics_process(_delta: float) -> void:
 	if target != null:
-		rotation = -target.rotation # think something gets flipped somewhere in this scene but we end up needing to invert rotation here
+		rotation = target.rotation
 		global_position = target.global_position

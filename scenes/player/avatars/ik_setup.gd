@@ -1,6 +1,8 @@
 extends GodotIK
 
-func setup(head_bone:int, left_arm_bone:int, right_arm_bone:int, left_leg_bone:int, right_leg_bone:int, is_local:bool, head_target:Node3D) -> void:
+func setup(head_bone:int, left_arm_bone:int, right_arm_bone:int, left_leg_bone:int, right_leg_bone:int, is_local:bool, head_target:Node3D, player:MovementHandler) -> void:
+	head_target.global_transform = (get_child(4) as GodotIKEffector).global_transform
+	player.camera_height = head_target.position.y
 	(get_child(4) as GodotIKEffector).bone_idx = head_bone
 	(get_child(4) as GodotIKEffector).is_local = is_local
 	(get_child(4) as GodotIKEffector).target = head_target

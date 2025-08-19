@@ -17,7 +17,6 @@ var verticalSensitivityMultiplier:float = 0.75
 func _ready() -> void:
 	rotateTarget = player_access.player
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	@warning_ignore("unsafe_property_access")
 	player_access.player.head = self
 
 func _unhandled_input(event:InputEvent) -> void:

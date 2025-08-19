@@ -3,7 +3,6 @@
 [ext_resource type="PackedScene" uid="uid://doj7dd4nu4kqf" path="res://scenes/player/avatars/built in avatars/cubefella/Untitled.glb" id="1_71gth"]
 
 [node name="CubeFella" type="Node3D"]
-transform = Transform3D(1.8, 0, 0, 0, 1.8, 0, 0, 0, 1.8, 0, 0, 0)
 
 [node name="Untitled" parent="." instance=ExtResource("1_71gth")]
 

@@ -4,7 +4,6 @@ signal avatar_loaded
 
 @export var networker:PlayerNetworker
 @export var player:MovementHandler
-var default_transform:Transform3D = Transform3D(Basis.FLIP_Z.scaled(Vector3(1.8, 1.8, 1.8)), Vector3(0, -1.17, 0))
 var owner_id:int
 var equiped_avatar:Node3D
 var current_avatar:int
@@ -31,7 +30,6 @@ func change_avatar(target_player:int, avatar:int) -> void:
 		current_avatar = avatar
 		equiped_avatar = new_avatar.instantiate()
 		get_parent().add_child(equiped_avatar)
-		equiped_avatar.transform = default_transform
 		AvatarPackLoader.update_avatar_list()
 		var thread:Thread = Thread.new()
 		thread.start(load_avatar_on_thread.bind(avatar))
@@ -43,7 +41,6 @@ func change_avatar(target_player:int, avatar:int) -> void:
 	await get_tree().physics_frame # dont have both avatars loaded at the same time
 	equiped_avatar = setup_avatar(new_avatar.instantiate())
 	get_parent().add_child(equiped_avatar)
-	equiped_avatar.transform = default_transform
 
 func load_avatar_on_thread(avatar:int) -> void:
 	if !AvatarPackLoader.avatars.has(avatar):
@@ -79,14 +76,21 @@ func get_node_and_children_recursive(root:Node) -> Array[Node]:
 
 # goes through the avatar scene looking for stubs and replaces them with the corrosponding scenes
 func setup_avatar(root:Node) -> Node:
+	var combined_aabb:AABB = AABB(Vector3(0, 0, 0), Vector3(0.1, 0.1, 0.1))
 	var nodes:Array[Node] = get_node_and_children_recursive(root)
 	# check for markers and setup if they exist
 	for node:Node in nodes:
+		if node is VisualInstance3D:
+			var aabb:AABB = (node as VisualInstance3D).get_aabb().abs()
+			combined_aabb.merge(aabb)
 		if node.has_meta("IKMarker"):
 			var ik:GodotIK = preload("res://scenes/player/avatars/godot_ik.tscn").instantiate()
 			var bones:Dictionary = node.get_meta("IKMarker")
 			# todo: check marker is valid
-			@warning_ignore("unsafe_method_access")
-			ik.setup(bones["head_bone"], bones["left_arm_bone"], bones["right_arm_bone"], bones["left_leg_bone"], bones["right_leg_bone"], player.is_local, player.head)
 			node.add_child(ik)
+			@warning_ignore("unsafe_property_access", "unsafe_method_access")
+			ik.setup.call_deferred(bones["head_bone"], bones["left_arm_bone"], bones["right_arm_bone"], bones["left_leg_bone"], bones["right_leg_bone"], player.is_local, player.head, player)
+	(player.collider.shape as CapsuleShape3D).radius = maxf(combined_aabb.size.x, combined_aabb.size.z)
+	(player.collider.shape as CapsuleShape3D).height = combined_aabb.size.y
+	player.collider.position = combined_aabb.position
 	return root

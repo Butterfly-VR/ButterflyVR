@@ -6,7 +6,7 @@
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_mfl08"]
 
-[node name="player" type="CharacterBody3D" node_paths=PackedStringArray("networker") groups=["Players"]]
+[node name="player" type="CharacterBody3D" node_paths=PackedStringArray("networker", "collider") groups=["Players"]]
 collision_layer = 16
 axis_lock_angular_x = true
 axis_lock_angular_z = true
@@ -14,6 +14,7 @@ floor_constant_speed = true
 platform_on_leave = 1
 script = ExtResource("1_gyb1k")
 networker = NodePath("PlayerNetworker")
+collider = NodePath("CollisionShape3D")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 shape = SubResource("CapsuleShape3D_mfl08")

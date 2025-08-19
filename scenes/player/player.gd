@@ -13,10 +13,11 @@ const JUMP_VELOCITY:float = 6
 const CROUCH_SPEED_MULT:float = 0.6
 const SPRINT_SPEED_MULT:float = 2.0
 const CROUCH_JUMP_MULT:float = 0.6
-const DEFAULT_CAMERA_HEIGHT:float = 0.67
-const CROUCHED_CAMERA_HEIGHT:float = 0.3
+var camera_height:float
+const CROUCHED_CAMERA_HEIGHT_MULTIPLIER:float = 0.7
 
 @export var networker:PlayerNetworker
+@export var collider:CollisionShape3D
 
 var gravity:float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var head:Node3D
@@ -31,13 +32,14 @@ var cam_x_rotation:float
 func init_local() -> void:
 	is_local = true
 	player = preload("res://scenes/player/local_player_desktop.tscn").instantiate()
-	player.player = self
-	player.networker = networker
-	add_child.call_deferred(player)
+	final_init(player)
 
 func init_remote() -> void:
 	is_local = false
 	player = preload("res://scenes/player/remote_player.tscn").instantiate()
+	final_init(player)
+
+func final_init(player:PlayerAccess) -> void:
 	player.player = self
 	player.networker = networker
 	add_child.call_deferred(player)
@@ -57,9 +59,9 @@ func _physics_process(delta:float) -> void:
 			modified_jump_velocity = modified_jump_velocity * CROUCH_JUMP_MULT
 	if head:
 		if player_state == Player_states.CROUCHED:
-			head.position.y = lerp(head.position.y, CROUCHED_CAMERA_HEIGHT, 0.05)
+			head.position.y = lerp(head.position.y, camera_height * CROUCHED_CAMERA_HEIGHT_MULTIPLIER, 0.05)
 		else:
-			head.position.y = lerp(head.position.y, DEFAULT_CAMERA_HEIGHT, 0.05)
+			head.position.y = lerp(head.position.y, camera_height, 0.05)
 	
 	if not is_on_floor():
 		velocity.y -= gravity * delta
