@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 [dependencies]
 bitvec = "1.0.1"
 build-time = "0.1.3"
-godot = { version = "0.3.2", features = ["experimental-threads"] }
+godot = { version = "0.3.5", features = ["experimental-threads"] }
 netcode-rs = "1.4.0"
 opus = "0.3.0"
 
