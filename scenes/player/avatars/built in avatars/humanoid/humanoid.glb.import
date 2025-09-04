@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://doj7dd4nu4kqf"
-path="res://.godot/imported/Untitled.glb-7fb8ef667bcc08ab9daf77aca86204b0.scn"
+uid="uid://2p2of86uosap"
+path="res://.godot/imported/humanoid.glb-4faaac1f61821c2fe2cd64095fa085f4.scn"
 
 [deps]
 
-source_file="res://scenes/player/avatars/built in avatars/cubefella/Untitled.glb"
-dest_files=["res://.godot/imported/Untitled.glb-7fb8ef667bcc08ab9daf77aca86204b0.scn"]
+source_file="res://scenes/player/avatars/built in avatars/humanoid/humanoid.glb"
+dest_files=["res://.godot/imported/humanoid.glb-4faaac1f61821c2fe2cd64095fa085f4.scn"]
 
 [params]
 
@@ -20,9 +20,9 @@ nodes/root_scale=1.0
 nodes/import_as_skeleton_bones=false
 nodes/use_node_type_suffixes=true
 meshes/ensure_tangents=true
-meshes/generate_lods=false
+meshes/generate_lods=true
 meshes/create_shadow_meshes=true
-meshes/light_baking=3
+meshes/light_baking=1
 meshes/lightmap_texel_size=0.2
 meshes/force_disable_compression=false
 skins/use_named_skins=true

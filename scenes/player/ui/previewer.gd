@@ -14,14 +14,14 @@ func _physics_process(_delta: float) -> void:
 		@warning_ignore("unsafe_property_access")
 		avatar = list.selected_avatar
 		if avatar == 0:
-			new_avatar = preload("res://scenes/player/avatars/built in avatars/cubefella/cube_fella.tscn")
+			new_avatar = preload("res://scenes/player/avatars/built in avatars/humanoid/humanoid.tscn")
 		else:
 			AvatarPackLoader.update_avatar_list()
 			var thread:Thread = Thread.new()
 			thread.start(load_avatar_on_thread.bind(avatar))
 			await avatar_preview_loaded
 			thread.wait_to_finish()
-		add_child(setup_avatar(new_avatar.instantiate()))
+		add_child(new_avatar.instantiate())
 
 func load_avatar_on_thread(new_avatar_idx:int) -> void:
 	if !AvatarPackLoader.avatars.has(new_avatar_idx):
@@ -54,15 +54,3 @@ func get_node_and_children_recursive(root:Node) -> Array[Node]:
 		nodes.append_array(get_node_and_children_recursive(node))
 		nodes.append(node)
 	return nodes
-
-# goes through the avatar scene looking for stubs and replaces them with the corrosponding scenes
-func setup_avatar(root:Node) -> Node:
-	var nodes:Array[Node] = get_node_and_children_recursive(root)
-	# check for markers and setup if they exist
-	for node:Node in nodes:
-		if node.has_meta("IKMarker"):
-			var ik:GodotIK = preload("res://scenes/player/avatars/godot_ik.tscn").instantiate()
-			var bones:Dictionary = node.get_meta("IKMarker")
-			# todo: check marker is valid
-			node.add_child(ik)
-	return root

@@ -1,60 +1,86 @@
-[gd_scene load_steps=4 format=3 uid="uid://iy8dt2wi4cr1"]
+[gd_scene load_steps=5 format=3 uid="uid://iy8dt2wi4cr1"]
 
 [ext_resource type="Script" uid="uid://ba84wt0o12oab" path="res://scenes/player/avatars/head_ik.gd" id="1_a3svs"]
 [ext_resource type="Script" uid="uid://vxxksbehb1wg" path="res://scenes/player/avatars/ik_setup.gd" id="1_u3w4j"]
 [ext_resource type="Script" uid="uid://cjy7aajvmdr7i" path="res://scenes/player/avatars/leg_controller.gd" id="2_qr1mp"]
+[ext_resource type="Script" uid="uid://blcysi2gbtq76" path="res://scenes/player/avatars/ik_follower.gd" id="2_vqhiq"]
 
-[node name="GodotIK" type="GodotIK"]
+[node name="GodotIK" type="GodotIK" node_paths=PackedStringArray("head", "left_arm", "right_arm", "left_leg", "right_leg", "spine", "hips")]
 script = ExtResource("1_u3w4j")
+head = NodePath("HeadFollower")
+left_arm = NodePath("LeftArmFollower")
+right_arm = NodePath("RightArmFollower")
+left_leg = NodePath("leftLegFollower")
+right_leg = NodePath("rightLegFollower")
+spine = NodePath("SpineFollower")
+hips = NodePath("HipFollower")
 
-[node name="GodotIKEffector" type="GodotIKEffector" parent="."]
-bone_idx = 8
+[node name="LeftArmFollower" type="GodotIKEffector" parent="." node_paths=PackedStringArray("secondary_target1")]
 chain_length = 4
 transform_mode = 3
-transform = Transform3D(-1, 1.50996e-07, 0, -1.50996e-07, -1, 0, 0, 0, 1, -0.157035, 0.602395, -0.0280924)
+script = ExtResource("2_vqhiq")
+secondary_target1 = NodePath("../SpineFollower/LeftArmTarget")
 
-[node name="GodotIKEffector2" type="GodotIKEffector" parent="."]
-bone_idx = 12
+[node name="RightArmFollower" type="GodotIKEffector" parent="." node_paths=PackedStringArray("secondary_target1")]
 chain_length = 4
 transform_mode = 3
-transform = Transform3D(-1, -8.74228e-08, 0, 8.74228e-08, -1, 0, 0, 0, 1, 0.172402, 0.602, -0.028)
+script = ExtResource("2_vqhiq")
+secondary_target1 = NodePath("../SpineFollower/RightArmTarget")
 
-[node name="GodotIKEffector3" type="GodotIKEffector" parent="."]
-bone_idx = 15
+[node name="SpineFollower" type="GodotIKEffector" parent="." node_paths=PackedStringArray("secondary_target1", "secondary_target2")]
+chain_length = 4
+transform_mode = 3
+script = ExtResource("2_vqhiq")
+secondary_target1 = NodePath("../HeadFollower/SpineTarget")
+secondary_target1_strength = 0.511
+secondary_target2 = NodePath("../HipFollower/SpineTarget")
+
+[node name="HipTarget" type="Node3D" parent="SpineFollower"]
+
+[node name="LeftArmTarget" type="Node3D" parent="SpineFollower"]
+
+[node name="RightArmTarget" type="Node3D" parent="SpineFollower"]
+
+[node name="HipFollower" type="GodotIKEffector" parent="." node_paths=PackedStringArray("secondary_target1")]
+chain_length = 4
+transform_mode = 3
+script = ExtResource("2_vqhiq")
+secondary_target1 = NodePath("../LegController/HipTarget")
+
+[node name="SpineTarget" type="Node3D" parent="HipFollower"]
+
+[node name="leftLegFollower" type="GodotIKEffector" parent="."]
 chain_length = 3
 transform_mode = 2
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0631546, 0.0922858, 0.0073939)
 
-[node name="RayCast3D" type="RayCast3D" parent="GodotIKEffector3"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0138695, 0)
-enabled = false
-target_position = Vector3(0, -0.05, 0)
-hit_from_inside = true
-
-[node name="GodotIKEffector4" type="GodotIKEffector" parent="."]
-bone_idx = 18
-chain_length = 3
-transform_mode = 2
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.063, 0.092, 0.007)
-
-[node name="RayCast3D" type="RayCast3D" parent="GodotIKEffector4"]
+[node name="RayCast3D" type="RayCast3D" parent="leftLegFollower"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0142021, 0)
 enabled = false
 target_position = Vector3(0, -0.05, 0)
 hit_from_inside = true
 
-[node name="GodotIKEffector5" type="GodotIKEffector" parent="."]
-bone_idx = 4
+[node name="rightLegFollower" type="GodotIKEffector" parent="."]
+chain_length = 3
+transform_mode = 2
+
+[node name="RayCast3D" type="RayCast3D" parent="rightLegFollower"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0138695, 0)
+enabled = false
+target_position = Vector3(0, -0.05, 0)
+hit_from_inside = true
+
+[node name="HeadFollower" type="GodotIKEffector" parent="."]
 chain_length = 3
 transform_mode = 3
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.01, 0)
 script = ExtResource("1_a3svs")
+
+[node name="SpineTarget" type="Node3D" parent="HeadFollower"]
 
 [node name="LegController" type="Node3D" parent="." node_paths=PackedStringArray("leg1", "leg1_target", "leg2", "leg2_target")]
 script = ExtResource("2_qr1mp")
-leg1 = NodePath("../GodotIKEffector3")
+leg1 = NodePath("../rightLegFollower")
 leg1_target = NodePath("IdealLegPosition1")
-leg2 = NodePath("../GodotIKEffector4")
+leg2 = NodePath("../leftLegFollower")
 leg2_target = NodePath("IdealLegPosition2")
 
 [node name="IdealLegPosition1" type="Node3D" parent="LegController"]
@@ -62,3 +88,5 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0549426, 0.0899917, 0)
 
 [node name="IdealLegPosition2" type="Node3D" parent="LegController"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.055, 0.09, 0)
+
+[node name="HipTarget" type="Node3D" parent="LegController"]

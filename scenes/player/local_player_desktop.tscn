@@ -10,16 +10,24 @@
 [node name="LocalPlayerDesktop" type="Node3D" groups=["LocalPlayer"]]
 script = ExtResource("1_yag7k")
 
-[node name="Camera3D" parent="." node_paths=PackedStringArray("player_access") instance=ExtResource("1_76yq6")]
+[node name="Node3D" type="Node3D" parent="."]
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 0, 0, 0)
+
+[node name="Camera3D" parent="Node3D" node_paths=PackedStringArray("player_access", "raycaster", "movement_handler", "rotation_center") instance=ExtResource("1_76yq6")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
-player_access = NodePath("..")
+player_access = NodePath("../..")
+raycaster = NodePath("Raycaster")
+movement_handler = NodePath("../../MovementHandler")
+rotation_center = NodePath("..")
 
-[node name="UIRoot" parent="Camera3D" instance=ExtResource("2_t54nr")]
+[node name="UIRoot" parent="Node3D/Camera3D" instance=ExtResource("2_t54nr")]
 
-[node name="Raycaster" parent="Camera3D" instance=ExtResource("3_yag7k")]
+[node name="Raycaster" parent="Node3D/Camera3D" instance=ExtResource("3_yag7k")]
+script = null
 
-[node name="MovementHandler" type="Node" parent="." node_paths=PackedStringArray("player_access")]
+[node name="MovementHandler" type="Node" parent="." node_paths=PackedStringArray("player_access", "camera_rotation_origin")]
 script = ExtResource("2_4c4oc")
 player_access = NodePath("..")
+camera_rotation_origin = NodePath("../Node3D")
 
 [node name="AudioHandler" parent="." instance=ExtResource("3_oaug5")]

@@ -4,7 +4,7 @@ extends Node3D
 var grabbed_node:Node3D
 var owner_id:int
 var networker:PlayerNetworker
-var player:MovementHandler
+var player:Player
 
 func _ready() -> void:
 	player = player_access.player
