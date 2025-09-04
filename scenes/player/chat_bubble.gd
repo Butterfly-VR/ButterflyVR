@@ -9,7 +9,7 @@ func _ready() -> void:
 func on_message(message:ChatBoxManager.Message) -> void:
 	@warning_ignore("unsafe_property_access")
 	if message.player == get_parent().id:
-		var contents = message.text
+		var contents:String = message.text
 		if contents.length() > 203:
 			contents = contents.left(200)
 			contents += "..."

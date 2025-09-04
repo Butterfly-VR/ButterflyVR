@@ -20,7 +20,7 @@ func update() -> void:
 				add_child(avatar_button)
 			# handle default avatar
 			var default_avatar_button:Button = button.duplicate()
-			default_avatar_button.text = "cube fella"
+			default_avatar_button.text = "default_humanoid"
 			default_avatar_button.pressed.connect(change_avatar.bind(0))
 			add_child(default_avatar_button)
 			

@@ -10,22 +10,22 @@ const TRAVEL_SPEED:float = 60
 const FALL_TRAVEL_TIME:float = 0.06
 
 @export var leg1:GodotIKEffector
+@export var leg1_target:Node3D
 var leg1_cycle_state:cycle_states = cycle_states.planted
 var leg1_time_since_move:float = 0.0
-@export var leg1_target:Node3D
 var leg1_velocity_position_offset:Vector3
 var leg1_target_base_position:Vector3
 
 @export var leg2:GodotIKEffector
+@export var leg2_target:Node3D
 var leg2_cycle_state:cycle_states = cycle_states.planted
 var leg2_time_since_move:float = 0.0
-@export var leg2_target:Node3D
 var leg2_velocity_position_offset:Vector3
 var leg2_target_base_position:Vector3
 
 var rising_height_progress:float = 0.0
 
-@onready var target:Node3D = get_parent().get_parent().get_parent()
+@onready var target:Node3D = get_parent().get_parent()
 var last_target_position:Vector3
 
 enum cycle_states{

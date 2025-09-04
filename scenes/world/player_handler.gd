@@ -15,7 +15,7 @@ func _get_value_type(_previous_value: Variant, idx: int) -> int:
 func _process_message(values: Array) -> void:
 	var player_owner:int = values[0]
 	var world:WorldController = GlobalWorldAccess.current_world
-	var player:MovementHandler = preload("res://scenes/player/player.tscn").instantiate()
+	var player:Player = preload("res://scenes/player/player.tscn").instantiate()
 	player.set_meta("owner_id", player_owner)
 	world.add_child(player)
 	player.global_transform = world.spawn_point.global_transform

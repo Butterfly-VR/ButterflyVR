@@ -23,7 +23,7 @@ static func path_to_index_path(scene_path:String, caller:Node) -> Array[int]:
 		if node == null:
 			push_warning("tried to parse invalid path: " + scene_path)
 			return []
-		var index = node.get_index()
+		var index:int = node.get_index()
 		if index != -1:
 			index_path.push_front(index)
 	

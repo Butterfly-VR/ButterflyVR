@@ -1,7 +1,7 @@
 extends NetworkedNode
 class_name PlayerNetworker
 
-@export var target:MovementHandler
+@export var target:Player
 
 func _ready() -> void:
 	while !(NetworkManager as NetNodeManager).id_ready():
@@ -10,21 +10,36 @@ func _ready() -> void:
 		target.init_local()
 	else:
 		target.init_remote()
-	if (NetworkManager as NetNodeManager).get_id() == 0:
+	if (NetworkManager as NetNodeManager).is_server():
 		(NetworkManager as NetNodeManager).register_player_object(owner_id, target)
 
 func _get_networked_values() -> Array:
-	return [target.position, target.rotation, target.velocity, target.cam_x_rotation, target.player_state == target.Player_states.CROUCHED]
+	var values:Array = []
+	values.push_back(target.position)
+	values.push_back(target.rotation)
+	values.push_back(target.velocity)
+	values.push_back(target.head_ik_target.position)
+	values.push_back(target.head_ik_target.rotation)
+	values.push_back(target.left_arm_ik_target.position)
+	values.push_back(target.left_arm_ik_target.rotation)
+	values.push_back(target.right_arm_ik_target.position)
+	values.push_back(target.right_arm_ik_target.rotation)
+	values.push_back(target.interactor_origin.position)
+	values.push_back(target.interactor_origin.rotation)
+	return values
 
 func _set_networked_values(values: Array) -> void:
 	target.position = values[0]
 	target.rotation = values[1]
 	target.velocity = values[2]
-	target.cam_x_rotation = values[3]
-	if values[4]:
-		target.player_state = target.Player_states.CROUCHED
-	else:
-		target.player_state = target.Player_states.NONE
+	target.head_ik_target.position = values[3]
+	target.head_ik_target.rotation = values[4]
+	target.left_arm_ik_target.position = values[5]
+	target.left_arm_ik_target.rotation = values[6]
+	target.right_arm_ik_target.position = values[7]
+	target.right_arm_ik_target.rotation = values[8]
+	target.interactor_origin.position = values[9]
+	target.interactor_origin.rotation = values[10]
 
 func _get_networked_value_type(idx: int) -> int:
 	match idx:
@@ -35,9 +50,21 @@ func _get_networked_value_type(idx: int) -> int:
 		2:
 			return 5
 		3:
-			return 4
+			return 5
 		4:
-			return 0
+			return 5
+		5:
+			return 5
+		6:
+			return 5
+		7:
+			return 5
+		8:
+			return 5
+		9:
+			return 5
+		10:
+			return 5
 	return -1
 
 func _get_priority(_clientid: int) -> int:

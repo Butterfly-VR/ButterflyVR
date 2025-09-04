@@ -1,0 +1,49 @@
+[gd_scene load_steps=2 format=3 uid="uid://yolmyvdi0j54"]
+
+[ext_resource type="PackedScene" uid="uid://2p2of86uosap" path="res://scenes/player/avatars/built in avatars/humanoid/humanoid.glb" id="1_5mlco"]
+
+[node name="Humanoid" type="Node3D"]
+
+[node name="humanoid" parent="." instance=ExtResource("1_5mlco")]
+
+[node name="Skeleton3D" parent="humanoid/Armature" index="0"]
+metadata/IKMarker = {
+"head_bone": 4,
+"head_target": 1,
+"head_view": 4,
+"hip_bone": 0,
+"hip_target": 5,
+"left_arm_bone": 8,
+"left_arm_target": 3,
+"left_leg_bone": 43,
+"right_arm_bone": 26,
+"right_arm_target": 2,
+"right_leg_bone": 46,
+"spine_bone": 2,
+"spine_target": 6
+}
+
+[node name="HeadTarget" type="Node3D" parent="humanoid/Armature/Skeleton3D" index="1"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 3.185, 0.066)
+rotation_edit_mode = 2
+
+[node name="RightArmTarget2" type="Node3D" parent="humanoid/Armature/Skeleton3D" index="2"]
+transform = Transform3D(0, 1, 0, 1, 0, 0, 0, 0, -1, 1.499, 2.774, 0.066)
+rotation_edit_mode = 2
+
+[node name="LeftArmTarget" type="Node3D" parent="humanoid/Armature/Skeleton3D" index="3"]
+transform = Transform3D(0, -1, 0, -1, 0, 0, 0, 0, -1, -1.499, 2.774, 0.066)
+rotation_edit_mode = 2
+
+[node name="HeadView" type="Node3D" parent="humanoid/Armature/Skeleton3D" index="4"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 3.33514, 0.066)
+
+[node name="HipTarget" type="Node3D" parent="humanoid/Armature/Skeleton3D" index="5"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 1.737, 0.066)
+rotation_edit_mode = 2
+
+[node name="SpineTarget" type="Node3D" parent="humanoid/Armature/Skeleton3D" index="6"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 2.585, 0.066)
+rotation_edit_mode = 2
+
+[editable path="humanoid"]

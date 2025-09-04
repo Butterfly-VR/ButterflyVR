@@ -61,7 +61,6 @@ pub impl MessageHandler {
             .bind_mut()
             .is_server()
         {
-            godot_warn!("handling on server");
             self.handle_message(packet.clone().as_bitslice(), &mut BYTES2.clone());
         }
         self.network_manager
